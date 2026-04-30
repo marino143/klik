@@ -1,0 +1,265 @@
+import AppKit
+import ScreenCaptureKit
+
+@MainActor
+final class CaptureCoordinator {
+    private let manager = CaptureManager()
+    private let recorder = VideoRecordingManager()
+    private var regionSelector: RegionSelectorController?
+    private var windowPicker: WindowPickerController?
+    private var recordingControlBar: RecordingControlBar?
+
+    var isRecording: Bool { recorder.isRecording }
+
+    func captureFullScreen() {
+        Task {
+            do {
+                let content = try await manager.shareableContent()
+                guard let display = content.displays.first else {
+                    showError(CaptureError.noDisplay)
+                    return
+                }
+                let image = try await manager.captureFullDisplay(display)
+                handleCapturedImage(image)
+            } catch {
+                showError(error)
+            }
+        }
+    }
+
+    func captureRegion() {
+        Task {
+            do {
+                let content = try await manager.shareableContent()
+                let selector = RegionSelectorController()
+                self.regionSelector = selector
+                selector.start { [weak self] selection in
+                    guard let self else { return }
+                    self.regionSelector = nil
+                    guard let selection else { return }
+                    let display = self.findDisplay(for: selection.screen, in: content) ?? content.displays.first
+                    guard let display else {
+                        self.showError(CaptureError.noDisplay)
+                        return
+                    }
+                    Task {
+                        do {
+                            try await Task.sleep(nanoseconds: 150_000_000)
+                            let image = try await self.manager.captureRegion(selection.rect, on: display)
+                            self.handleCapturedImage(image)
+                        } catch {
+                            self.showError(error)
+                        }
+                    }
+                }
+            } catch {
+                showError(error)
+            }
+        }
+    }
+
+    private func findDisplay(for screen: NSScreen?, in content: SCShareableContent) -> SCDisplay? {
+        guard let screen else { return nil }
+        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            return nil
+        }
+        return content.displays.first(where: { $0.displayID == displayID })
+    }
+
+    func captureWindow() {
+        Task {
+            do {
+                let content = try await manager.shareableContent()
+                let pickable = content.windows.filter { window in
+                    window.owningApplication?.bundleIdentifier != Bundle.main.bundleIdentifier
+                        && window.frame.width > 50
+                        && window.frame.height > 50
+                        && window.isOnScreen
+                }
+                let picker = WindowPickerController(windows: pickable)
+                self.windowPicker = picker
+                picker.start { [weak self] window in
+                    guard let self else { return }
+                    self.windowPicker = nil
+                    guard let window else { return }
+                    Task {
+                        do {
+                            try await Task.sleep(nanoseconds: 100_000_000)
+                            let image = try await self.manager.captureWindow(window)
+                            self.handleCapturedImage(image)
+                        } catch {
+                            self.showError(error)
+                        }
+                    }
+                }
+            } catch {
+                showError(error)
+            }
+        }
+    }
+
+    func toggleVideoRecording() {
+        if recorder.isRecording {
+            stopVideoRecording()
+        } else {
+            startFullScreenVideoRecording()
+        }
+    }
+
+    func toggleRegionVideoRecording() {
+        if recorder.isRecording {
+            stopVideoRecording()
+        } else {
+            startRegionVideoRecording()
+        }
+    }
+
+    private func startFullScreenVideoRecording() {
+        Task {
+            do {
+                let content = try await manager.shareableContent()
+                let preferredDisplay = findDisplay(for: NSScreen.main, in: content) ?? content.displays.first
+                guard let display = preferredDisplay else {
+                    showError(CaptureError.noDisplay)
+                    return
+                }
+                guard let screen = matchingScreen(for: display) else {
+                    showError(CaptureError.noDisplay)
+                    return
+                }
+                let region = CGRect(x: 0, y: 0, width: CGFloat(display.width), height: CGFloat(display.height))
+                let excludingApps = klikApps(in: content)
+                _ = try await self.recorder.startRecording(
+                    region: region,
+                    on: display,
+                    screen: screen,
+                    excludingApps: excludingApps
+                )
+                self.presentControlBar()
+            } catch {
+                showError(error)
+            }
+        }
+    }
+
+    private func startRegionVideoRecording() {
+        Task {
+            do {
+                let content = try await manager.shareableContent()
+                let selector = RegionSelectorController()
+                self.regionSelector = selector
+                selector.start { [weak self] selection in
+                    guard let self else { return }
+                    self.regionSelector = nil
+                    guard let selection else { return }
+                    let display = self.findDisplay(for: selection.screen, in: content) ?? content.displays.first
+                    guard let display else {
+                        self.showError(CaptureError.noDisplay)
+                        return
+                    }
+                    let excludingApps = self.klikApps(in: content)
+                    Task {
+                        do {
+                            try await Task.sleep(nanoseconds: 200_000_000)
+                            _ = try await self.recorder.startRecording(
+                                region: selection.rect,
+                                on: display,
+                                screen: selection.screen,
+                                excludingApps: excludingApps
+                            )
+                            self.presentControlBar()
+                        } catch {
+                            self.showError(error)
+                        }
+                    }
+                }
+            } catch {
+                showError(error)
+            }
+        }
+    }
+
+    private func klikApps(in content: SCShareableContent) -> [SCRunningApplication] {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.marino.klik"
+        return content.applications.filter { $0.bundleIdentifier == bundleID }
+    }
+
+    private func matchingScreen(for display: SCDisplay) -> NSScreen? {
+        return NSScreen.screens.first { screen in
+            (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == display.displayID
+        } ?? NSScreen.main
+    }
+
+    private func stopVideoRecording() {
+        Task {
+            do {
+                let url = try await recorder.stopRecording()
+                dismissControlBar()
+                await handleRecordedVideo(at: url)
+            } catch {
+                dismissControlBar()
+                showError(error)
+            }
+        }
+    }
+
+    private func cancelVideoRecording() {
+        Task {
+            await recorder.cancelRecording()
+            dismissControlBar()
+        }
+    }
+
+    private func presentControlBar() {
+        let bar = RecordingControlBar()
+        bar.onStop = { [weak self] in self?.stopVideoRecording() }
+        bar.onCancel = { [weak self] in self?.cancelVideoRecording() }
+        self.recordingControlBar = bar
+        bar.present()
+    }
+
+    private func dismissControlBar() {
+        recordingControlBar?.dismissBar()
+        recordingControlBar = nil
+    }
+
+    private func handleRecordedVideo(at url: URL) async {
+        let poster = await VideoPoster.firstFrame(of: url) ?? NSImage(systemSymbolName: "video.fill", accessibilityDescription: nil) ?? NSImage()
+        let state = VideoMediaState(fileURL: url, poster: poster, isPendingSave: true)
+        QuickAccessOverlayController.show(media: .video(state))
+    }
+
+    private func handleCapturedImage(_ image: CGImage) {
+        let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+
+        if Storage.shared.copyToClipboardOnCapture {
+            Storage.shared.copyToClipboard(nsImage)
+        }
+
+        guard let fileURL = Storage.shared.saveImage(nsImage) else {
+            EditorWindowController.show(image: nsImage)
+            return
+        }
+
+        QuickAccessOverlayController.show(media: .image(nsImage, fileURL: fileURL))
+    }
+
+    private func showError(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = "Klik"
+        alert.informativeText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        if case CaptureError.noPermission = error {
+            alert.addButton(withTitle: "Open Settings")
+            let response = alert.runModal()
+            if response == .alertSecondButtonReturn {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        } else {
+            alert.runModal()
+        }
+    }
+}

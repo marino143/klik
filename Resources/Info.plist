@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Klik</string>
+    <key>CFBundleExecutable</key>
+    <string>Klik</string>
+    <key>CFBundleIconFile</key>
+    <string>Klik</string>
+    <key>CFBundleIconName</key>
+    <string>Klik</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.marino.klik</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Klik</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Klik needs Screen Recording permission to capture screenshots and video recordings.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Klik needs microphone access to record your voice in video recordings.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Klik uses Apple Events to interact with the system.</string>
+</dict>
+</plist>
