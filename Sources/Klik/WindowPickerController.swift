@@ -17,8 +17,9 @@ final class WindowPickerController {
             completion(nil)
             return
         }
-        for screen in NSScreen.screens {
-            let window = NSWindow(
+        NSApp.activate(ignoringOtherApps: true)
+        for (index, screen) in NSScreen.screens.enumerated() {
+            let window = OverlayWindow(
                 contentRect: screen.frame,
                 styleMask: .borderless,
                 backing: .buffered,
@@ -42,11 +43,13 @@ final class WindowPickerController {
                 self?.finish(picked: nil)
             }
             window.contentView = view
-            window.makeFirstResponder(view)
             window.orderFrontRegardless()
+            if index == 0 {
+                window.makeKeyAndOrderFront(nil)
+            }
+            window.makeFirstResponder(view)
             overlayWindows.append(window)
         }
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func finish(picked: SCWindow?) {
@@ -137,12 +140,20 @@ private final class WindowPickerView: NSView {
         guard let hovered = hoveredWindow,
               let rect = windowFrameInView(hovered) else { return }
 
-        NSColor.systemBlue.withAlphaComponent(0.2).setFill()
+        NSColor.white.withAlphaComponent(0.12).setFill()
         rect.fill()
+
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
+        shadow.shadowBlurRadius = 4
+        shadow.shadowOffset = .zero
+        shadow.set()
         let border = NSBezierPath(rect: rect)
-        NSColor.systemBlue.setStroke()
-        border.lineWidth = 2.5
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        border.lineWidth = 2
         border.stroke()
+        NSGraphicsContext.restoreGraphicsState()
 
         if let title = hovered.title ?? hovered.owningApplication?.applicationName {
             let attrs: [NSAttributedString.Key: Any] = [

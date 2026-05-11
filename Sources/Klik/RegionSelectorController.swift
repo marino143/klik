@@ -12,8 +12,9 @@ final class RegionSelectorController {
 
     func start(completion: @escaping (RegionSelection?) -> Void) {
         self.completion = completion
-        for screen in NSScreen.screens {
-            let window = NSWindow(
+        NSApp.activate(ignoringOtherApps: true)
+        for (index, screen) in NSScreen.screens.enumerated() {
+            let window = OverlayWindow(
                 contentRect: screen.frame,
                 styleMask: .borderless,
                 backing: .buffered,
@@ -36,11 +37,13 @@ final class RegionSelectorController {
                 self?.finish(selection: nil)
             }
             window.contentView = view
-            window.makeFirstResponder(view)
             window.orderFrontRegardless()
+            if index == 0 {
+                window.makeKeyAndOrderFront(nil)
+            }
+            window.makeFirstResponder(view)
             windows.append(window)
         }
-        NSApp.activate(ignoringOtherApps: true)
         NSCursor.crosshair.push()
     }
 
@@ -117,10 +120,18 @@ private final class RegionSelectionView: NSView {
         NSColor.clear.setFill()
         rect.fill()
 
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
+        shadow.shadowBlurRadius = 4
+        shadow.shadowOffset = .zero
+        shadow.set()
+
         let border = NSBezierPath(rect: rect)
-        NSColor.systemBlue.setStroke()
-        border.lineWidth = 1.5
+        NSColor.white.withAlphaComponent(0.95).setStroke()
+        border.lineWidth = 2
         border.stroke()
+        NSGraphicsContext.restoreGraphicsState()
 
         let label = "\(Int(rect.width)) × \(Int(rect.height))"
         let attrs: [NSAttributedString.Key: Any] = [
