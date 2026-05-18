@@ -50,9 +50,20 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         }
 
         let scale = screen.backingScaleFactor
-        let pixelWidth = max(2, Int(region.width * scale))
-        let pixelHeight = max(2, Int(region.height * scale))
-        NSLog("Klik: startRecording region=\(region) scale=\(scale) px=\(pixelWidth)x\(pixelHeight)")
+        let nativeWidth = max(2, Int(region.width * scale))
+        let nativeHeight = max(2, Int(region.height * scale))
+
+        // Cap the output at 1440p height to keep memory under control.
+        // On a 5K display, a full-screen capture is 5120×2880 → 59 MB per frame.
+        // With queueDepth=3 and an encoder pipeline that's still GB-class.
+        // Downscaling to 1440 height (via SCStream's own scaler) drops that ~4×.
+        let maxOutputHeight = 1440
+        let scaleFactor: Double = nativeHeight > maxOutputHeight
+            ? Double(maxOutputHeight) / Double(nativeHeight)
+            : 1.0
+        let pixelWidth = max(2, Int(Double(nativeWidth) * scaleFactor) & ~1)   // even
+        let pixelHeight = max(2, Int(Double(nativeHeight) * scaleFactor) & ~1) // even
+        NSLog("Klik: startRecording region=\(region) scale=\(scale) native=\(nativeWidth)x\(nativeHeight) output=\(pixelWidth)x\(pixelHeight)")
 
         let fileURL = Storage.shared.makeTempVideoURL()
         NSLog("Klik: temp output URL = \(fileURL.path)")
@@ -113,12 +124,12 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         config.width = pixelWidth
         config.height = pixelHeight
         config.minimumFrameInterval = CMTime(value: 1, timescale: 30)
-        config.queueDepth = 6
+        config.queueDepth = 3
         config.showsCursor = true
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.colorSpaceName = CGColorSpace.displayP3
         config.sourceRect = region
-        config.scalesToFit = false
+        config.scalesToFit = true
         config.capturesAudio = true
         config.sampleRate = 48000
         config.channelCount = 2
