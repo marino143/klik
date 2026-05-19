@@ -34,6 +34,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private(set) var outputURL: URL?
     private(set) var startedAt: Date?
 
+    /// Number of microphone sample buffers appended to the writer during the
+    /// most recent recording. Reset on each `startRecording` call.
+    private(set) var microphoneSampleCount: Int = 0
+
     var isRecording: Bool { stream != nil }
 
     @MainActor
@@ -172,6 +176,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         self.streamOutput = output
         self.outputURL = fileURL
         self.firstFrameTime = nil
+        self.microphoneSampleCount = 0
 
         do {
             NSLog("Klik: calling stream.startCapture()…")
@@ -222,10 +227,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         case .screen:
             handleVideoSampleBuffer(sampleBuffer)
         case .audio:
-            handleAudioSampleBuffer(sampleBuffer, input: systemAudioInput)
+            handleAudioSampleBuffer(sampleBuffer, input: systemAudioInput, isMicrophone: false)
         default:
             if #available(macOS 15.0, *), type == .microphone {
-                handleAudioSampleBuffer(sampleBuffer, input: microphoneInput)
+                handleAudioSampleBuffer(sampleBuffer, input: microphoneInput, isMicrophone: true)
             }
         }
     }
@@ -249,10 +254,13 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         }
     }
 
-    private func handleAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer, input: AVAssetWriterInput?) {
+    private func handleAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer, input: AVAssetWriterInput?, isMicrophone: Bool) {
         guard let input = input, firstFrameTime != nil else { return }
         if input.isReadyForMoreMediaData {
             input.append(sampleBuffer)
+            if isMicrophone {
+                microphoneSampleCount += 1
+            }
         }
     }
 

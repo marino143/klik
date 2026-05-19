@@ -116,6 +116,7 @@ final class CaptureCoordinator {
 
     private func startFullScreenVideoRecording() {
         Task {
+            await ensureMicrophonePermissionOrWarn()
             do {
                 let content = try await manager.shareableContent()
                 let preferredDisplay = findDisplay(for: NSScreen.main, in: content) ?? content.displays.first
@@ -142,8 +143,32 @@ final class CaptureCoordinator {
         }
     }
 
+    private func ensureMicrophonePermissionOrWarn() async {
+        let priorStatus = MicrophoneAccess.currentStatus
+        let granted = await MicrophoneAccess.request()
+        guard !granted else { return }
+        if priorStatus == .denied || priorStatus == .restricted {
+            showMicrophoneDeniedAlert()
+        } else {
+            NotificationToast.show(message: "Microphone access not granted — recording without voice", duration: 3)
+        }
+    }
+
+    private func showMicrophoneDeniedAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Microphone access denied"
+        alert.informativeText = "Klik needs microphone access to record your voice. The recording will continue with system audio only. To enable it, open System Settings → Privacy & Security → Microphone and turn on Klik."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Continue Without Mic")
+        if alert.runModal() == .alertFirstButtonReturn {
+            MicrophoneAccess.openPrivacySettings()
+        }
+    }
+
     private func startRegionVideoRecording() {
         Task {
+            await ensureMicrophonePermissionOrWarn()
             do {
                 let content = try await manager.shareableContent()
                 let selector = RegionSelectorController()
@@ -224,6 +249,12 @@ final class CaptureCoordinator {
     }
 
     private func handleRecordedVideo(at url: URL) async {
+        let micGranted = MicrophoneAccess.isGranted
+        let micSamples = recorder.microphoneSampleCount
+        NSLog("Klik: recording finished — micGranted=\(micGranted) micSampleCount=\(micSamples)")
+        if micGranted && micSamples == 0 {
+            NotificationToast.show(message: "Warning: no microphone audio was captured", duration: 4)
+        }
         let poster = await VideoPoster.firstFrame(of: url) ?? NSImage(systemSymbolName: "video.fill", accessibilityDescription: nil) ?? NSImage()
         let state = VideoMediaState(fileURL: url, poster: poster, isPendingSave: true)
         QuickAccessOverlayController.show(media: .video(state))
