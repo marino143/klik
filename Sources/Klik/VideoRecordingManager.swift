@@ -23,6 +23,7 @@ enum RecordingError: Error, LocalizedError {
 
 final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.marino.klik.recording.queue", qos: .userInitiated)
+    private let micCaptureQueue = DispatchQueue(label: "com.marino.klik.mic.queue", qos: .userInitiated)
 
     private var stream: SCStream?
     private var streamOutput: VideoStreamOutput?
@@ -30,6 +31,8 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private var videoInput: AVAssetWriterInput?
     private var systemAudioInput: AVAssetWriterInput?
     private var microphoneInput: AVAssetWriterInput?
+    private var micCaptureSession: AVCaptureSession?
+    private var micCaptureDelegate: MicrophoneCaptureDelegate?
     private var firstFrameTime: CMTime?
     private(set) var outputURL: URL?
     private(set) var startedAt: Date?
@@ -137,9 +140,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         config.capturesAudio = true
         config.sampleRate = 48000
         config.channelCount = 2
-        if #available(macOS 15.0, *) {
-            config.captureMicrophone = true
-        }
+        // Note: SCStream's captureMicrophone (macOS 15+) silently drops samples
+        // when other audio consumers (e.g. Teams in a browser) hold the device.
+        // We use AVCaptureSession for the microphone instead — it coexists
+        // properly with other apps.
 
         let filter: SCContentFilter
         if !excludingApps.isEmpty {
@@ -152,10 +156,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         do {
             try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: queue)
             try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: queue)
-            if #available(macOS 15.0, *) {
-                try stream.addStreamOutput(output, type: .microphone, sampleHandlerQueue: queue)
-            }
-            NSLog("Klik: addStreamOutput OK (screen + audio + mic)")
+            NSLog("Klik: addStreamOutput OK (screen + system audio)")
         } catch let e as NSError {
             NSLog("Klik: addStreamOutput FAILED — domain=\(e.domain) code=\(e.code) desc=\(e.localizedDescription)")
             throw RecordingError.streamStartFailed(e)
@@ -183,13 +184,64 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             try await stream.startCapture()
             self.startedAt = Date()
             NSLog("Klik: stream.startCapture() OK — recording in progress")
-            return fileURL
         } catch let e as NSError {
             NSLog("Klik: startCapture FAILED — domain=\(e.domain) code=\(e.code) desc=\(e.localizedDescription) info=\(e.userInfo)")
             writer.finishWriting { }
             self.cleanupRecordingState()
             try? FileManager.default.removeItem(at: fileURL)
             throw RecordingError.streamStartFailed(e)
+        }
+
+        // Spin up a separate AVCaptureSession for the microphone — it
+        // coexists with browser/Teams mic usage, unlike SCStream's built-in
+        // microphone capture which silently dropped samples in those cases.
+        if MicrophoneAccess.isGranted {
+            startMicrophoneCapture()
+        } else {
+            NSLog("Klik: microphone permission not granted, recording without voice")
+        }
+
+        return fileURL
+    }
+
+    private func startMicrophoneCapture() {
+        guard let micDevice = AVCaptureDevice.default(for: .audio) else {
+            NSLog("Klik: no default microphone device found")
+            return
+        }
+        NSLog("Klik: microphone device — name=\(micDevice.localizedName) uid=\(micDevice.uniqueID)")
+
+        let session = AVCaptureSession()
+
+        let input: AVCaptureDeviceInput
+        do {
+            input = try AVCaptureDeviceInput(device: micDevice)
+        } catch {
+            NSLog("Klik: failed to create AVCaptureDeviceInput for mic — \(error)")
+            return
+        }
+        guard session.canAddInput(input) else {
+            NSLog("Klik: cannot add mic input to AVCaptureSession")
+            return
+        }
+        session.addInput(input)
+
+        let output = AVCaptureAudioDataOutput()
+        let delegate = MicrophoneCaptureDelegate(owner: self)
+        output.setSampleBufferDelegate(delegate, queue: micCaptureQueue)
+        guard session.canAddOutput(output) else {
+            NSLog("Klik: cannot add audio output to AVCaptureSession")
+            return
+        }
+        session.addOutput(output)
+
+        self.micCaptureSession = session
+        self.micCaptureDelegate = delegate
+
+        // startRunning blocks; do it off the main actor
+        micCaptureQueue.async {
+            session.startRunning()
+            NSLog("Klik: AVCaptureSession for microphone is running")
         }
     }
 
@@ -199,6 +251,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             throw RecordingError.notRecording
         }
 
+        stopMicrophoneCapture()
         try await stream.stopCapture()
         input.markAsFinished()
         systemAudioInput?.markAsFinished()
@@ -211,6 +264,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     @MainActor
     func cancelRecording() async {
         guard let stream = stream, let writer = writer, let url = outputURL else { return }
+        stopMicrophoneCapture()
         try? await stream.stopCapture()
         videoInput?.markAsFinished()
         systemAudioInput?.markAsFinished()
@@ -218,6 +272,15 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         await writer.finishWriting()
         try? FileManager.default.removeItem(at: url)
         cleanupRecordingState()
+    }
+
+    private func stopMicrophoneCapture() {
+        guard let session = micCaptureSession else { return }
+        if session.isRunning {
+            session.stopRunning()
+        }
+        micCaptureSession = nil
+        micCaptureDelegate = nil
     }
 
     fileprivate func handleSampleBuffer(_ sampleBuffer: CMSampleBuffer, type: SCStreamOutputType) {
@@ -229,10 +292,12 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         case .audio:
             handleAudioSampleBuffer(sampleBuffer, input: systemAudioInput, isMicrophone: false)
         default:
-            if #available(macOS 15.0, *), type == .microphone {
-                handleAudioSampleBuffer(sampleBuffer, input: microphoneInput, isMicrophone: true)
-            }
+            break
         }
+    }
+
+    fileprivate func handleMicrophoneSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        handleAudioSampleBuffer(sampleBuffer, input: microphoneInput, isMicrophone: true)
     }
 
     private func handleVideoSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
@@ -271,6 +336,8 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         videoInput = nil
         systemAudioInput = nil
         microphoneInput = nil
+        micCaptureSession = nil
+        micCaptureDelegate = nil
         firstFrameTime = nil
         startedAt = nil
     }
@@ -292,5 +359,20 @@ private final class VideoStreamOutput: NSObject, SCStreamOutput {
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
         owner?.handleSampleBuffer(sampleBuffer, type: outputType)
+    }
+}
+
+final class MicrophoneCaptureDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
+    weak var owner: VideoRecordingManager?
+
+    init(owner: VideoRecordingManager) {
+        self.owner = owner
+        super.init()
+    }
+
+    func captureOutput(_ output: AVCaptureOutput,
+                       didOutput sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) {
+        owner?.handleMicrophoneSampleBuffer(sampleBuffer)
     }
 }
