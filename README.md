@@ -8,6 +8,7 @@
     <img src="https://img.shields.io/badge/Swift-5.10%2B-orange" alt="Swift 5.10+">
     <img src="https://img.shields.io/badge/Apple%20Silicon-arm64-black" alt="Apple Silicon">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+    <a href="https://buymeacoffee.com/marino143"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy Me A Coffee"></a>
   </p>
 </div>
 
@@ -132,6 +133,10 @@ Open an issue if you want one of these, or send a PR.
 I use CleanShot every day. I wanted to see how close I could get to its core experience with a Saturday-afternoon side project — no Electron, no third-party deps, just native macOS frameworks on Apple Silicon. The result is a single 700 KB binary that does the things I actually use a screen-capture tool for.
 
 If you find it useful, star the repo. If something's missing, open an issue.
+
+## Support
+
+If Klik saved you a CleanShot subscription or a HandBrake round-trip, consider [buying me a coffee](https://buymeacoffee.com/marino143) ☕. No pressure — the app is and stays free.
 
 ## License
 

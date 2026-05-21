@@ -35,6 +35,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(makeMenuItem("Settings…", key: ",", action: #selector(openSettings)))
         menu.addItem(NSMenuItem.separator())
+        let coffeeItem = NSMenuItem(title: "Buy me a coffee ☕", action: #selector(openBuyMeACoffee), keyEquivalent: "")
+        coffeeItem.target = self
+        menu.addItem(coffeeItem)
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(makeMenuItem("Quit Klik", key: "q", action: #selector(quit)))
         statusItem.menu = menu
     }
@@ -83,6 +87,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         SettingsWindowController.shared.show()
+    }
+
+    @objc private func openBuyMeACoffee() {
+        if let url = URL(string: "https://buymeacoffee.com/marino143") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     @objc private func quit() {
