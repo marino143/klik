@@ -255,9 +255,32 @@ final class CaptureCoordinator {
         if micGranted && micSamples == 0 {
             NotificationToast.show(message: "Warning: no microphone audio was captured", duration: 4)
         }
+
+        // If both system audio and mic produced samples (two audio tracks),
+        // automatically mix them into one track in-place so downstream tools
+        // (HandBrake, Slack uploads, browsers, etc.) get a single-track MP4
+        // and don't drop the microphone audio.
+        if micSamples > 0 {
+            await autoMixAudioTracks(inPlaceAt: url)
+        }
+
         let poster = await VideoPoster.firstFrame(of: url) ?? NSImage(systemSymbolName: "video.fill", accessibilityDescription: nil) ?? NSImage()
         let state = VideoMediaState(fileURL: url, poster: poster, isPendingSave: true)
         QuickAccessOverlayController.show(media: .video(state))
+    }
+
+    private func autoMixAudioTracks(inPlaceAt url: URL) async {
+        let mixedURL = url.deletingPathExtension().appendingPathExtension("mixed.mp4")
+        NotificationToast.show(message: "Mixing audio…", duration: 1.5)
+        do {
+            try await AudioMixer.mixAudioTracks(inputURL: url, outputURL: mixedURL)
+            try? FileManager.default.removeItem(at: url)
+            try FileManager.default.moveItem(at: mixedURL, to: url)
+            NSLog("Klik: auto-mixed audio into single track at \(url.path)")
+        } catch {
+            try? FileManager.default.removeItem(at: mixedURL)
+            NSLog("Klik: auto-mix failed, keeping original two-track audio — \(error)")
+        }
     }
 
     private func handleCapturedImage(_ image: CGImage) {
