@@ -23,7 +23,6 @@ enum RecordingError: Error, LocalizedError {
 
 final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.marino.klik.recording.queue", qos: .userInitiated)
-    private let micCaptureQueue = DispatchQueue(label: "com.marino.klik.mic.queue", qos: .userInitiated)
 
     private var stream: SCStream?
     private var streamOutput: VideoStreamOutput?
@@ -31,8 +30,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private var videoInput: AVAssetWriterInput?
     private var systemAudioInput: AVAssetWriterInput?
     private var microphoneInput: AVAssetWriterInput?
-    private var micCaptureSession: AVCaptureSession?
-    private var micCaptureDelegate: MicrophoneCaptureDelegate?
+    private var micAudioEngine: AVAudioEngine?
     private var firstFrameTime: CMTime?
     private(set) var outputURL: URL?
     private(set) var startedAt: Date?
@@ -206,44 +204,93 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     }
 
     private func startMicrophoneCapture() {
-        guard let micDevice = AVCaptureDevice.default(for: .audio) else {
-            NSLog("Klik: no default microphone device found")
-            return
-        }
-        NSLog("Klik: microphone device — name=\(micDevice.localizedName) uid=\(micDevice.uniqueID)")
+        let engine = AVAudioEngine()
+        let inputNode = engine.inputNode
 
-        let session = AVCaptureSession()
-
-        let input: AVCaptureDeviceInput
+        // Voice processing = echo cancellation + noise suppression + AGC.
+        // Without this, recordings made without headphones double up on the
+        // other person's voice (clean copy from system audio + faint copy
+        // captured acoustically from the speakers via the mic). With voice
+        // processing on, macOS subtracts the speaker output from the mic
+        // input at the system level, so the mic track has only the user's
+        // voice.
         do {
-            input = try AVCaptureDeviceInput(device: micDevice)
+            try inputNode.setVoiceProcessingEnabled(true)
+            NSLog("Klik: voice processing (AEC + NS + AGC) enabled on microphone")
         } catch {
-            NSLog("Klik: failed to create AVCaptureDeviceInput for mic — \(error)")
-            return
+            NSLog("Klik: voice processing not available — \(error). Recording without echo cancellation.")
         }
-        guard session.canAddInput(input) else {
-            NSLog("Klik: cannot add mic input to AVCaptureSession")
-            return
-        }
-        session.addInput(input)
 
-        let output = AVCaptureAudioDataOutput()
-        let delegate = MicrophoneCaptureDelegate(owner: self)
-        output.setSampleBufferDelegate(delegate, queue: micCaptureQueue)
-        guard session.canAddOutput(output) else {
-            NSLog("Klik: cannot add audio output to AVCaptureSession")
-            return
-        }
-        session.addOutput(output)
+        let format = inputNode.outputFormat(forBus: 0)
+        NSLog("Klik: mic format sampleRate=\(format.sampleRate) channels=\(format.channelCount)")
 
-        self.micCaptureSession = session
-        self.micCaptureDelegate = delegate
-
-        // startRunning blocks; do it off the main actor
-        micCaptureQueue.async {
-            session.startRunning()
-            NSLog("Klik: AVCaptureSession for microphone is running")
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, time in
+            guard let self else { return }
+            if let sb = self.cmSampleBuffer(from: buffer, at: time) {
+                self.handleMicrophoneSampleBuffer(sb)
+            }
         }
+
+        do {
+            try engine.start()
+            self.micAudioEngine = engine
+            NSLog("Klik: AVAudioEngine for microphone started")
+        } catch {
+            NSLog("Klik: failed to start AVAudioEngine — \(error)")
+            inputNode.removeTap(onBus: 0)
+        }
+    }
+
+    private func cmSampleBuffer(from pcmBuffer: AVAudioPCMBuffer, at time: AVAudioTime) -> CMSampleBuffer? {
+        let frameLength = Int(pcmBuffer.frameLength)
+        guard frameLength > 0 else { return nil }
+
+        var asbd = pcmBuffer.format.streamDescription.pointee
+        var formatDescription: CMAudioFormatDescription?
+        let fdStatus = CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &asbd,
+            layoutSize: 0, layout: nil,
+            magicCookieSize: 0, magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &formatDescription
+        )
+        guard fdStatus == noErr, let fd = formatDescription else { return nil }
+
+        // PTS in host time clock to stay in the same time base as SCStream's
+        // video / system-audio sample buffers.
+        let pts: CMTime
+        if time.isHostTimeValid {
+            pts = CMClockMakeHostTimeFromSystemUnits(time.hostTime)
+        } else {
+            pts = CMTime(value: time.sampleTime, timescale: Int32(time.sampleRate))
+        }
+
+        var sampleBuffer: CMSampleBuffer?
+        let createStatus = CMAudioSampleBufferCreateWithPacketDescriptions(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: nil,
+            dataReady: false,
+            makeDataReadyCallback: nil,
+            refcon: nil,
+            formatDescription: fd,
+            sampleCount: CMItemCount(frameLength),
+            presentationTimeStamp: pts,
+            packetDescriptions: nil,
+            sampleBufferOut: &sampleBuffer
+        )
+        guard createStatus == noErr, let sb = sampleBuffer else { return nil }
+
+        let setStatus = CMSampleBufferSetDataBufferFromAudioBufferList(
+            sb,
+            blockBufferAllocator: kCFAllocatorDefault,
+            blockBufferMemoryAllocator: kCFAllocatorDefault,
+            flags: 0,
+            bufferList: pcmBuffer.audioBufferList
+        )
+        guard setStatus == noErr else { return nil }
+
+        return sb
     }
 
     @MainActor
@@ -276,12 +323,12 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     }
 
     private func stopMicrophoneCapture() {
-        guard let session = micCaptureSession else { return }
-        if session.isRunning {
-            session.stopRunning()
+        guard let engine = micAudioEngine else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        if engine.isRunning {
+            engine.stop()
         }
-        micCaptureSession = nil
-        micCaptureDelegate = nil
+        micAudioEngine = nil
     }
 
     fileprivate func handleSampleBuffer(_ sampleBuffer: CMSampleBuffer, type: SCStreamOutputType) {
@@ -337,8 +384,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         videoInput = nil
         systemAudioInput = nil
         microphoneInput = nil
-        micCaptureSession = nil
-        micCaptureDelegate = nil
+        micAudioEngine = nil
         firstFrameTime = nil
         startedAt = nil
     }
@@ -363,17 +409,3 @@ private final class VideoStreamOutput: NSObject, SCStreamOutput {
     }
 }
 
-final class MicrophoneCaptureDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
-    weak var owner: VideoRecordingManager?
-
-    init(owner: VideoRecordingManager) {
-        self.owner = owner
-        super.init()
-    }
-
-    func captureOutput(_ output: AVCaptureOutput,
-                       didOutput sampleBuffer: CMSampleBuffer,
-                       from connection: AVCaptureConnection) {
-        owner?.handleMicrophoneSampleBuffer(sampleBuffer)
-    }
-}
