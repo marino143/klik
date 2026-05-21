@@ -60,11 +60,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         let nativeWidth = max(2, Int(region.width * scale))
         let nativeHeight = max(2, Int(region.height * scale))
 
-        // Cap the output at 1440p height to keep memory under control.
-        // On a 5K display, a full-screen capture is 5120×2880 → 59 MB per frame.
-        // With queueDepth=3 and an encoder pipeline that's still GB-class.
-        // Downscaling to 1440 height (via SCStream's own scaler) drops that ~4×.
-        let maxOutputHeight = 1440
+        // Cap output at 1080p height. Combined with the HEVC encoder below
+        // this aims for HandBrake "Fast 1080p30"-class file sizes out of the
+        // box, so the user doesn't have to re-encode meeting recordings.
+        let maxOutputHeight = 1080
         let scaleFactor: Double = nativeHeight > maxOutputHeight
             ? Double(maxOutputHeight) / Double(nativeHeight)
             : 1.0
@@ -83,18 +82,20 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             throw RecordingError.writerSetupFailed(error.localizedDescription)
         }
 
-        let computedBitrate = Int(Double(pixelWidth * pixelHeight) * 2.5)
-        let bitrate = min(computedBitrate, 20_000_000)
-        NSLog("Klik: video bitrate = \(bitrate) bps (~\(bitrate / 1_000_000) Mbps)")
+        // HEVC + ~1.5 bits/pixel + 6 Mbps cap. Screen content compresses
+        // exceptionally well with HEVC; this matches HandBrake Fast 1080p30
+        // size-wise without requiring a second compression pass.
+        let computedBitrate = Int(Double(pixelWidth * pixelHeight) * 1.5)
+        let bitrate = min(computedBitrate, 6_000_000)
+        NSLog("Klik: video bitrate = \(bitrate) bps (~\(bitrate / 1_000_000) Mbps), codec=HEVC")
         let videoSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoCodecKey: AVVideoCodecType.hevc,
             AVVideoWidthKey: pixelWidth,
             AVVideoHeightKey: pixelHeight,
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: bitrate,
                 AVVideoMaxKeyFrameIntervalKey: 60,
                 AVVideoExpectedSourceFrameRateKey: 30,
-                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
             ] as [String: Any]
         ]
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)

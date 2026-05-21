@@ -102,15 +102,15 @@ To regenerate the app icon from the source script:
 
 ## File Size Estimates
 
-With default H.264 settings (2.5 bits/pixel, capped at 20 Mbps + two audio tracks):
+Klik records HEVC (H.265) at a 1080p ceiling — sized for sharing meeting recordings on Slack / Drive / email without a separate re-compression pass. Defaults: ~1.5 bits/pixel, capped at 6 Mbps, plus two AAC audio tracks (128 kbps each).
 
 | What you record | Per minute | 30 min | 1 hour |
 |---|---|---|---|
-| 1080p region | ~40 MB | ~1.2 GB | ~2.4 GB |
-| 4K full screen | ~150 MB | ~4.5 GB | ~9 GB |
-| 5K full screen (capped) | ~150 MB | ~4.5 GB | ~9 GB |
+| 1080p region (or any full-screen, downscaled to 1080p) | ~25 MB | ~750 MB | ~1.5 GB |
+| 720p region | ~12 MB | ~360 MB | ~720 MB |
+| Audio only (both tracks) | ~2 MB | ~60 MB | ~115 MB |
 
-Tip: capture a smaller region instead of the full 4K/5K display — file size scales with pixel count.
+Source captures larger than 1080p (1440p, 4K, 5K) are downscaled by ScreenCaptureKit before encoding, so a full-screen recording on a 5K display still produces a 1080p MP4. This keeps memory use and file size predictable.
 
 ## Roadmap
 
