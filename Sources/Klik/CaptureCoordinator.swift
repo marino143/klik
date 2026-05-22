@@ -271,7 +271,8 @@ final class CaptureCoordinator {
 
     private func autoMixAudioTracks(inPlaceAt url: URL) async {
         let mixedURL = url.deletingPathExtension().appendingPathExtension("mixed.mp4")
-        NotificationToast.show(message: "Removing echo + mixing audio…", duration: 2.0)
+        ProcessingHUD.shared.show(message: "Removing echo + mixing audio…")
+        defer { ProcessingHUD.shared.hide() }
 
         // First try echo cancellation + mix. If anything goes wrong, fall back
         // to the plain track sum so the user still gets a single-track file.
@@ -286,6 +287,7 @@ final class CaptureCoordinator {
             NSLog("Klik: echo-cancel mix failed (\(error)); falling back to plain mix")
         }
 
+        ProcessingHUD.shared.update(message: "Mixing audio…")
         do {
             try await AudioMixer.mixAudioTracks(inputURL: url, outputURL: mixedURL)
             try? FileManager.default.removeItem(at: url)
