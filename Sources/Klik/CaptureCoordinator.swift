@@ -271,15 +271,29 @@ final class CaptureCoordinator {
 
     private func autoMixAudioTracks(inPlaceAt url: URL) async {
         let mixedURL = url.deletingPathExtension().appendingPathExtension("mixed.mp4")
-        NotificationToast.show(message: "Mixing audio…", duration: 1.5)
+        NotificationToast.show(message: "Removing echo + mixing audio…", duration: 2.0)
+
+        // First try echo cancellation + mix. If anything goes wrong, fall back
+        // to the plain track sum so the user still gets a single-track file.
+        do {
+            try await EchoCancellingMixer.process(inputURL: url, outputURL: mixedURL)
+            try? FileManager.default.removeItem(at: url)
+            try FileManager.default.moveItem(at: mixedURL, to: url)
+            NSLog("Klik: echo-cancelled + mixed audio into single track at \(url.path)")
+            return
+        } catch {
+            try? FileManager.default.removeItem(at: mixedURL)
+            NSLog("Klik: echo-cancel mix failed (\(error)); falling back to plain mix")
+        }
+
         do {
             try await AudioMixer.mixAudioTracks(inputURL: url, outputURL: mixedURL)
             try? FileManager.default.removeItem(at: url)
             try FileManager.default.moveItem(at: mixedURL, to: url)
-            NSLog("Klik: auto-mixed audio into single track at \(url.path)")
+            NSLog("Klik: plain-mixed audio into single track at \(url.path)")
         } catch {
             try? FileManager.default.removeItem(at: mixedURL)
-            NSLog("Klik: auto-mix failed, keeping original two-track audio — \(error)")
+            NSLog("Klik: plain mix also failed, keeping original two-track audio — \(error)")
         }
     }
 
