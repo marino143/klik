@@ -207,19 +207,14 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
 
-        // Voice processing = echo cancellation + noise suppression + AGC.
-        // Without this, recordings made without headphones double up on the
-        // other person's voice (clean copy from system audio + faint copy
-        // captured acoustically from the speakers via the mic). With voice
-        // processing on, macOS subtracts the speaker output from the mic
-        // input at the system level, so the mic track has only the user's
-        // voice.
-        do {
-            try inputNode.setVoiceProcessingEnabled(true)
-            NSLog("Klik: voice processing (AEC + NS + AGC) enabled on microphone")
-        } catch {
-            NSLog("Klik: voice processing not available — \(error). Recording without echo cancellation.")
-        }
+        // NOTE: we deliberately do NOT enable voice processing
+        // (setVoiceProcessingEnabled). It performs echo cancellation, but it
+        // also switches the whole shared audio I/O into "voice chat" mode,
+        // which compresses/degrades the system-audio output path that
+        // SCStream captures — making the other meeting participant sound
+        // tinny/compressed. Plain capture keeps both the mic and the system
+        // audio clean. The acoustic echo when recording without headphones is
+        // the trade-off; headphones avoid it entirely.
 
         let format = inputNode.outputFormat(forBus: 0)
         NSLog("Klik: mic format sampleRate=\(format.sampleRate) channels=\(format.channelCount)")
@@ -234,7 +229,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         do {
             try engine.start()
             self.micAudioEngine = engine
-            NSLog("Klik: AVAudioEngine for microphone started")
+            NSLog("Klik: AVAudioEngine for microphone started (clean, no voice processing)")
         } catch {
             NSLog("Klik: failed to start AVAudioEngine — \(error)")
             inputNode.removeTap(onBus: 0)
