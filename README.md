@@ -79,6 +79,14 @@ To sign with your own Apple Developer certificate, set `KLIK_SIGN_IDENTITY`:
 KLIK_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)" ./build.sh release
 ```
 
+`build.sh` signs with an Apple Development certificate, which is fine locally but is rejected by Gatekeeper on any other Mac. `release.sh` builds the distributable instead — Developer ID signature, hardened runtime, notarised by Apple and stapled:
+
+```bash
+./release.sh 0.2.0
+```
+
+Notarisation needs App Store Connect credentials, stored once in your keychain (see the header of `release.sh`).
+
 To regenerate the app icon from the source script:
 
 ```bash
