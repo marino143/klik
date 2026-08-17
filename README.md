@@ -8,6 +8,7 @@
     <img src="https://img.shields.io/badge/Swift-5.10%2B-orange" alt="Swift 5.10+">
     <img src="https://img.shields.io/badge/Apple%20Silicon-arm64-black" alt="Apple Silicon">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+    <a href="https://codigit.io/apps/klik.html"><img src="https://img.shields.io/badge/codigit.io-Klik-e63946" alt="Klik on codigit.io"></a>
     <a href="https://buymeacoffee.com/marino143"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy Me A Coffee"></a>
   </p>
 </div>
