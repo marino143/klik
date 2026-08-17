@@ -56,8 +56,12 @@ No subscription, no telemetry, no Electron — just a 700 KB native `.app`.
 
 1. Download `Klik.app.zip` from the [latest release](https://github.com/marino143/klik/releases/latest)
 2. Unzip → drag **Klik.app** into `/Applications`
-3. First launch — right-click `Klik.app` → **Open** → confirm in the dialog
-   *(the app is signed with an Apple Development certificate, so Gatekeeper asks once)*
+3. First launch is blocked by Gatekeeper — the release build is signed but **not yet notarised**, so macOS refuses to open it until you allow it once:
+   - Double-click **Klik.app**, then dismiss the warning
+   - Open **System Settings → Privacy & Security**, scroll to *Security*, and click **Open Anyway** next to Klik
+   - Confirm, and Klik launches
+
+   On macOS 14 right-clicking the app and choosing **Open** does the same thing in one step; from macOS 15 onwards that shortcut no longer bypasses Gatekeeper. If you prefer the terminal, `xattr -d com.apple.quarantine /Applications/Klik.app` clears the flag outright.
 4. Look for the camera-viewfinder icon in your menu bar
 5. Press <kbd>⇧⌘3</kbd> — macOS will prompt for **Screen Recording** permission. Grant it, then **Quit & Reopen** Klik
 6. The first time you record video, you'll also be prompted for **Microphone** access
