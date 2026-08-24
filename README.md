@@ -17,7 +17,7 @@
 
 **Klik** is a lightweight macOS screen capture and recording utility inspired by CleanShot.
 It lives in your menu bar, captures screenshots and video, and gets out of your way.
-No subscription, no telemetry, no Electron — just a 700 KB native `.app`.
+No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB binary).
 
 ## Features
 
@@ -30,7 +30,7 @@ No subscription, no telemetry, no Electron — just a 700 KB native `.app`.
 ### 🎥 Video Recording
 - **Full-screen** or **region** recording, 30 fps HEVC (H.265) MP4 at a 1080p ceiling
 - Records **system audio** *and* **microphone** — ideal for capturing meetings
-- Optional **mix audio tracks into one** for sharing-friendly single-track MP4
+- **Echo cancellation + audio mixdown** run automatically after every recording — the two tracks become one sharing-friendly AAC track, with the speaker echo removed from your mic
 - **Convert MP4 → GIF** (12 fps, optimized) in one click
 - Floating control bar with REC indicator, live timer, stop and cancel buttons
 - Klik's own windows are excluded from the recording automatically
@@ -49,8 +49,8 @@ No subscription, no telemetry, no Electron — just a 700 KB native `.app`.
 | <kbd>⇧⌘3</kbd> | Capture full screen |
 | <kbd>⇧⌘4</kbd> | Capture window |
 | <kbd>⇧⌘5</kbd> | Record video (full screen) |
-| <kbd>⌘,</kbd> | Settings |
-| <kbd>⌘Q</kbd> | Quit Klik |
+| <kbd>⇧⌘,</kbd> | Settings |
+| <kbd>⇧⌘Q</kbd> | Quit Klik |
 | <kbd>Esc</kbd> | Cancel current capture |
 
 ## Installation
@@ -102,11 +102,12 @@ To regenerate the app icon from the source script:
 | UI | AppKit + SwiftUI |
 | Screenshot | ScreenCaptureKit (`SCScreenshotManager`) |
 | Video | ScreenCaptureKit (`SCStream`) + AVAssetWriter |
-| Audio | System audio via SCStream, microphone via SCStream (macOS 15+) |
+| Audio | System audio via SCStream, microphone via AVCaptureSession + AVAudioEngine |
+| Echo cancellation | Time-domain NLMS adaptive filter with Geigel double-talk detection (Accelerate) |
 | Audio mixing | AVAssetReader / AVAssetWriter (passthrough video, PCM sum + AAC re-encode) |
 | GIF | ImageIO + AVAssetImageGenerator |
 | Global hotkeys | Carbon Event Manager |
-| Build | Swift Package Manager + custom `build.sh` |
+| Build | Swift Package Manager + custom `build.sh` / `release.sh` |
 
 **Zero third-party dependencies.** Everything runs on first-party Apple frameworks.
 
@@ -138,7 +139,7 @@ Open an issue if you want one of these, or send a PR.
 
 ## Why Klik
 
-I use CleanShot every day. I wanted to see how close I could get to its core experience with a Saturday-afternoon side project — no Electron, no third-party deps, just native macOS frameworks on Apple Silicon. The result is a single 700 KB binary that does the things I actually use a screen-capture tool for.
+I use CleanShot every day. I wanted to see how close I could get to its core experience with a Saturday-afternoon side project — no Electron, no third-party deps, just native macOS frameworks on Apple Silicon. The result is a single 766 KB binary that does the things I actually use a screen-capture tool for.
 
 If you find it useful, star the repo. If something's missing, open an issue.
 
