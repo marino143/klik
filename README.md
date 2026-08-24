@@ -28,7 +28,7 @@ No subscription, no telemetry, no Electron — just a 700 KB native `.app`.
 - **Auto-copy** to clipboard, **auto-save** to your chosen folder (default: Desktop)
 
 ### 🎥 Video Recording
-- **Full-screen** or **region** recording, 30 fps H.264 MP4
+- **Full-screen** or **region** recording, 30 fps HEVC (H.265) MP4 at a 1080p ceiling
 - Records **system audio** *and* **microphone** — ideal for capturing meetings
 - Optional **mix audio tracks into one** for sharing-friendly single-track MP4
 - **Convert MP4 → GIF** (12 fps, optimized) in one click
@@ -126,14 +126,13 @@ Source captures larger than 1080p (1440p, 4K, 5K) are downscaled by ScreenCaptur
 
 Things on the wishlist that aren't shipped yet:
 
-- HEVC codec option (≈40% smaller files at the same quality)
+- H.264 option, for players that still choke on HEVC
 - Recording quality presets (Low / Medium / High)
 - OCR — copy text out of screenshots
 - Scrolling capture
 - Cloud upload (S3, custom endpoint)
 - Editing annotations after creation
 - Drag-out without auto-closing the overlay
-- Notarization for distribution outside the developer's devices
 
 Open an issue if you want one of these, or send a PR.
 
