@@ -9,6 +9,14 @@ final class CaptureCoordinator {
     private var windowPicker: WindowPickerController?
     private var recordingControlBar: RecordingControlBar?
 
+    init() {
+        recorder.onUnexpectedStop = { [weak self] error in
+            guard let self else { return }
+            self.dismissControlBar()
+            self.showError(error)
+        }
+    }
+
     var isRecording: Bool { recorder.isRecording }
 
     func captureFullScreen() {
@@ -306,8 +314,17 @@ final class CaptureCoordinator {
             Storage.shared.copyToClipboard(nsImage)
         }
 
-        guard let fileURL = Storage.shared.saveImage(nsImage) else {
+        guard Storage.shared.autoSaveOnCapture else {
             EditorWindowController.show(image: nsImage)
+            return
+        }
+
+        guard let fileURL = Storage.shared.saveImage(nsImage) else {
+            showError(CaptureError.captureFailed(NSError(
+                domain: "Klik.Storage",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "The screenshot could not be saved."]
+            )))
             return
         }
 

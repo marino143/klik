@@ -1,13 +1,14 @@
 import AppKit
-import AVFoundation
-import ScreenCaptureKit
-import CoreMedia
+@preconcurrency import AVFoundation
+@preconcurrency import ScreenCaptureKit
+@preconcurrency import CoreMedia
 
 enum RecordingError: Error, LocalizedError {
     case alreadyRecording
     case notRecording
     case writerSetupFailed(String)
     case streamStartFailed(Error)
+    case recordingInterrupted(Error)
     case noDisplay
 
     var errorDescription: String? {
@@ -16,6 +17,7 @@ enum RecordingError: Error, LocalizedError {
         case .notRecording:               return "No active recording."
         case .writerSetupFailed(let m):   return "Failed to start recording: \(m)"
         case .streamStartFailed(let e):   return "ScreenCaptureKit error: \(e.localizedDescription)"
+        case .recordingInterrupted(let e):return "Recording stopped unexpectedly: \(e.localizedDescription)"
         case .noDisplay:                  return "No displays available."
         }
     }
@@ -34,10 +36,15 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private var firstFrameTime: CMTime?
     private(set) var outputURL: URL?
     private(set) var startedAt: Date?
+    var onUnexpectedStop: (@MainActor (Error) -> Void)?
 
     /// Number of microphone sample buffers appended to the writer during the
     /// most recent recording. Reset on each `startRecording` call.
-    private(set) var microphoneSampleCount: Int = 0
+    private var microphoneSampleCountValue: Int = 0
+
+    var microphoneSampleCount: Int {
+        queue.sync { microphoneSampleCountValue }
+    }
 
     var isRecording: Bool { stream != nil }
 
@@ -168,15 +175,17 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         }
         NSLog("Klik: writer.startWriting OK (writer status=\(writer.status.rawValue))")
 
-        self.writer = writer
-        self.videoInput = input
-        self.systemAudioInput = systemAudio
-        self.microphoneInput = micAudio
+        queue.sync {
+            self.writer = writer
+            self.videoInput = input
+            self.systemAudioInput = systemAudio
+            self.microphoneInput = micAudio
+            self.firstFrameTime = nil
+            self.microphoneSampleCountValue = 0
+        }
         self.stream = stream
         self.streamOutput = output
         self.outputURL = fileURL
-        self.firstFrameTime = nil
-        self.microphoneSampleCount = 0
 
         do {
             NSLog("Klik: calling stream.startCapture()…")
@@ -222,7 +231,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, time in
             guard let self else { return }
             if let sb = self.cmSampleBuffer(from: buffer, at: time) {
-                self.handleMicrophoneSampleBuffer(sb)
+                let sample = SendableSampleBuffer(sb)
+                self.queue.async {
+                    self.handleMicrophoneSampleBuffer(sample.value)
+                }
             }
         }
 
@@ -296,9 +308,11 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
 
         stopMicrophoneCapture()
         try await stream.stopCapture()
-        input.markAsFinished()
-        systemAudioInput?.markAsFinished()
-        microphoneInput?.markAsFinished()
+        queue.sync {
+            input.markAsFinished()
+            systemAudioInput?.markAsFinished()
+            microphoneInput?.markAsFinished()
+        }
         await writer.finishWriting()
         cleanupRecordingState()
         return url
@@ -309,9 +323,11 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         guard let stream = stream, let writer = writer, let url = outputURL else { return }
         stopMicrophoneCapture()
         try? await stream.stopCapture()
-        videoInput?.markAsFinished()
-        systemAudioInput?.markAsFinished()
-        microphoneInput?.markAsFinished()
+        queue.sync {
+            videoInput?.markAsFinished()
+            systemAudioInput?.markAsFinished()
+            microphoneInput?.markAsFinished()
+        }
         await writer.finishWriting()
         try? FileManager.default.removeItem(at: url)
         cleanupRecordingState()
@@ -367,27 +383,62 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         if input.isReadyForMoreMediaData {
             input.append(sampleBuffer)
             if isMicrophone {
-                microphoneSampleCount += 1
+                microphoneSampleCountValue += 1
             }
         }
     }
 
+    @MainActor
     private func cleanupRecordingState() {
         stream = nil
         streamOutput = nil
-        writer = nil
-        videoInput = nil
-        systemAudioInput = nil
-        microphoneInput = nil
+        queue.sync {
+            writer = nil
+            videoInput = nil
+            systemAudioInput = nil
+            microphoneInput = nil
+            firstFrameTime = nil
+        }
         micAudioEngine = nil
-        firstFrameTime = nil
         startedAt = nil
+    }
+
+    @MainActor
+    private func handleUnexpectedStop(_ error: Error, from stoppedStream: SCStream) async {
+        guard stream === stoppedStream else { return }
+
+        stopMicrophoneCapture()
+        let activeWriter = queue.sync { () -> AVAssetWriter? in
+            videoInput?.markAsFinished()
+            systemAudioInput?.markAsFinished()
+            microphoneInput?.markAsFinished()
+            return writer
+        }
+        if let activeWriter {
+            await activeWriter.finishWriting()
+        }
+        if let outputURL {
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        cleanupRecordingState()
+        onUnexpectedStop?(RecordingError.recordingInterrupted(error))
+    }
+}
+
+private final class SendableSampleBuffer: @unchecked Sendable {
+    let value: CMSampleBuffer
+
+    init(_ value: CMSampleBuffer) {
+        self.value = value
     }
 }
 
 extension VideoRecordingManager: SCStreamDelegate {
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         NSLog("Klik: SCStream stopped with error \(error)")
+        Task { @MainActor [weak self] in
+            await self?.handleUnexpectedStop(error, from: stream)
+        }
     }
 }
 
@@ -403,4 +454,3 @@ private final class VideoStreamOutput: NSObject, SCStreamOutput {
         owner?.handleSampleBuffer(sampleBuffer, type: outputType)
     }
 }
-

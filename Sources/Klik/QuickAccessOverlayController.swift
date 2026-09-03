@@ -138,7 +138,9 @@ final class QuickAccessOverlayController: NSWindowController, NSWindowDelegate {
             ctx.duration = 0.18
             window.animator().alphaValue = 0
         }, completionHandler: {
-            window.orderOut(nil)
+            Task { @MainActor in
+                window.orderOut(nil)
+            }
         })
         Self.layoutStack()
     }
@@ -160,6 +162,13 @@ final class QuickAccessOverlayController: NSWindowController, NSWindowDelegate {
             EditorWindowController.show(image: image)
             dismissOverlay()
         case .video(let state):
+            // Opening a recording means the user chose to keep it. Move it
+            // out of the temporary directory before handing it to QuickTime.
+            if state.isPendingSave,
+               let newURL = Storage.shared.moveVideoToFinalLocation(from: state.fileURL) {
+                state.fileURL = newURL
+                state.isPendingSave = false
+            }
             NSWorkspace.shared.open(state.fileURL)
         }
     }

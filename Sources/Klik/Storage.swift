@@ -1,13 +1,16 @@
 import AppKit
 
+@MainActor
 final class Storage {
     static let shared = Storage()
 
     private let formatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd HH.mm.ss"
+        f.dateFormat = "yyyy-MM-dd HH.mm.ss.SSS"
         return f
     }()
+
+    private let filenameLock = NSLock()
 
     var saveDirectory: URL {
         get {
@@ -40,8 +43,7 @@ final class Storage {
     func saveImage(_ image: NSImage, to directory: URL? = nil) -> URL? {
         let dir = directory ?? saveDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let filename = "Klik \(formatter.string(from: Date())).png"
-        let url = dir.appendingPathComponent(filename)
+        let url = uniqueURL(in: dir, extension: "png")
 
         guard let tiff = image.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff),
@@ -65,8 +67,7 @@ final class Storage {
     func makeVideoURL(extension ext: String = "mp4") -> URL {
         let dir = saveDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let filename = "Klik \(formatter.string(from: Date())).\(ext)"
-        return dir.appendingPathComponent(filename)
+        return uniqueURL(in: dir, extension: ext)
     }
 
     func makeTempVideoURL(extension ext: String = "mp4") -> URL {
@@ -80,17 +81,30 @@ final class Storage {
     func moveVideoToFinalLocation(from sourceURL: URL) -> URL? {
         let dir = saveDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let filename = "Klik \(formatter.string(from: Date())).\(sourceURL.pathExtension)"
-        let destURL = dir.appendingPathComponent(filename)
+        let destURL = uniqueURL(in: dir, extension: sourceURL.pathExtension)
         do {
-            if FileManager.default.fileExists(atPath: destURL.path) {
-                try FileManager.default.removeItem(at: destURL)
-            }
             try FileManager.default.moveItem(at: sourceURL, to: destURL)
             return destURL
         } catch {
             NSLog("Klik: moveVideoToFinalLocation failed — \(error)")
             return nil
         }
+    }
+
+
+    private func uniqueURL(in directory: URL, extension ext: String) -> URL {
+        filenameLock.lock()
+        defer { filenameLock.unlock() }
+
+        let base = "Klik \(formatter.string(from: Date()))"
+        var candidate = directory.appendingPathComponent(base).appendingPathExtension(ext)
+        var suffix = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = directory
+                .appendingPathComponent("\(base) \(suffix)")
+                .appendingPathExtension(ext)
+            suffix += 1
+        }
+        return candidate
     }
 }
