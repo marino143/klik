@@ -36,7 +36,7 @@ No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB
 - Klik's own windows are excluded from the recording automatically
 
 ### 🗂 Quick Access Overlay
-- After every full-screen or window capture (and every recording), a thumbnail slides in at the bottom-left corner — region captures skip it and open in the editor
+- After every capture, a thumbnail slides in at the bottom-left corner
 - **Drag** it directly into any app — Finder, Slack, Mail, browser uploads, anything that accepts files
 - Multiple captures **stack vertically** and stay visible until you dismiss them
 - Hover for **Open** / **Edit** / **Save** buttons; right-click for full action menu
@@ -45,7 +45,7 @@ No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB
 
 | Shortcut | Action |
 |---|---|
-| <kbd>⇧⌘2</kbd> | Capture region — opens straight in the editor |
+| <kbd>⇧⌘2</kbd> | Capture region |
 | <kbd>⇧⌘3</kbd> | Capture full screen |
 | <kbd>⇧⌘4</kbd> | Capture window |
 | <kbd>⇧⌘5</kbd> | Record video (full screen) |

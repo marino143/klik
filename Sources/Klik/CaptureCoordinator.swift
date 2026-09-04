@@ -54,9 +54,9 @@ final class CaptureCoordinator {
                         do {
                             try await Task.sleep(nanoseconds: 150_000_000)
                             let image = try await self.manager.captureRegion(selection.rect, on: display)
-                            // A hand-drawn region is almost always about to be
-                            // annotated — skip the corner overlay and open it.
-                            self.handleCapturedImage(image, openEditor: true)
+                            // Like CleanShot: a region capture lands in the corner
+                            // overlay, and the editor is one click away from there.
+                            self.handleCapturedImage(image, forceOverlay: true)
                         } catch {
                             self.showError(error)
                         }
@@ -309,7 +309,7 @@ final class CaptureCoordinator {
         }
     }
 
-    private func handleCapturedImage(_ image: CGImage, openEditor: Bool = false) {
+    private func handleCapturedImage(_ image: CGImage, forceOverlay: Bool = false) {
         // One PNG encode serves both the file and the clipboard, and the
         // full-size capture only becomes an NSImage when the editor needs it —
         // so nothing big outlives this call. The overlay gets a ~1 MB
@@ -327,7 +327,7 @@ final class CaptureCoordinator {
             Storage.shared.copyToClipboard(png: png)
         }
 
-        guard Storage.shared.autoSaveOnCapture, !openEditor else {
+        guard Storage.shared.autoSaveOnCapture || forceOverlay else {
             EditorWindowController.show(image: NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)))
             return
         }
