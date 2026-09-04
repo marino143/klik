@@ -8,7 +8,7 @@
     <img src="https://img.shields.io/badge/Swift-5.10%2B-orange" alt="Swift 5.10+">
     <img src="https://img.shields.io/badge/Apple%20Silicon-arm64-black" alt="Apple Silicon">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
-    <a href="https://codigit.io/apps/klik.html"><img src="https://img.shields.io/badge/codigit.io-Klik-e63946" alt="Klik on codigit.io"></a>
+    <a href="https://codigit.io/apps/klik"><img src="https://img.shields.io/badge/codigit.io-Klik-e63946" alt="Klik on codigit.io"></a>
     <a href="https://buymeacoffee.com/marino143"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy Me A Coffee"></a>
   </p>
 </div>
@@ -36,7 +36,7 @@ No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB
 - Klik's own windows are excluded from the recording automatically
 
 ### 🗂 Quick Access Overlay
-- After every capture, a thumbnail slides in at the bottom-left corner
+- After every full-screen or window capture (and every recording), a thumbnail slides in at the bottom-left corner — region captures skip it and open in the editor
 - **Drag** it directly into any app — Finder, Slack, Mail, browser uploads, anything that accepts files
 - Multiple captures **stack vertically** and stay visible until you dismiss them
 - Hover for **Open** / **Edit** / **Save** buttons; right-click for full action menu
@@ -45,7 +45,7 @@ No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB
 
 | Shortcut | Action |
 |---|---|
-| <kbd>⇧⌘2</kbd> | Capture region |
+| <kbd>⇧⌘2</kbd> | Capture region — opens straight in the editor |
 | <kbd>⇧⌘3</kbd> | Capture full screen |
 | <kbd>⇧⌘4</kbd> | Capture window |
 | <kbd>⇧⌘5</kbd> | Record video (full screen) |
