@@ -308,18 +308,29 @@ final class CaptureCoordinator {
     }
 
     private func handleCapturedImage(_ image: CGImage) {
-        let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
-
-        if Storage.shared.copyToClipboardOnCapture {
-            Storage.shared.copyToClipboard(nsImage)
-        }
-
-        guard Storage.shared.autoSaveOnCapture else {
-            EditorWindowController.show(image: nsImage)
+        // One PNG encode serves both the file and the clipboard, and the
+        // full-size capture only becomes an NSImage when the editor needs it —
+        // so nothing big outlives this call. The overlay gets a ~1 MB
+        // thumbnail and re-reads the file when asked.
+        guard let png = Storage.pngData(image) else {
+            showError(CaptureError.captureFailed(NSError(
+                domain: "Klik.Storage",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "The screenshot could not be encoded."]
+            )))
             return
         }
 
-        guard let fileURL = Storage.shared.saveImage(nsImage) else {
+        if Storage.shared.copyToClipboardOnCapture {
+            Storage.shared.copyToClipboard(png: png)
+        }
+
+        guard Storage.shared.autoSaveOnCapture else {
+            EditorWindowController.show(image: NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)))
+            return
+        }
+
+        guard let fileURL = Storage.shared.savePNG(png) else {
             showError(CaptureError.captureFailed(NSError(
                 domain: "Klik.Storage",
                 code: 1,
@@ -328,7 +339,9 @@ final class CaptureCoordinator {
             return
         }
 
-        QuickAccessOverlayController.show(media: .image(nsImage, fileURL: fileURL))
+        // 640 px is ~2.6× the overlay's 240 pt width — crisp on Retina.
+        let thumb = NSImage.thumbnail(of: image, maxPixelSize: 640)
+        QuickAccessOverlayController.show(media: .image(thumb, fileURL: fileURL))
     }
 
     private func showError(_ error: Error) {

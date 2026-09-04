@@ -6,6 +6,8 @@ enum VideoPoster {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
+        // Poster only ever shows in the 240 pt overlay thumbnail.
+        generator.maximumSize = CGSize(width: 640, height: 640)
         generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
         generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
 

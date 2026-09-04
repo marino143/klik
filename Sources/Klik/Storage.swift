@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 @MainActor
 final class Storage {
@@ -39,16 +40,22 @@ final class Storage {
         set { UserDefaults.standard.set(newValue, forKey: "Klik.autoSaveOnCapture") }
     }
 
+    /// PNG bytes straight from the CGImage through ImageIO. The previous
+    /// route (`tiffRepresentation` → `NSBitmapImageRep` → PNG) materialised
+    /// two extra ~60 MB buffers for every 5K capture.
+    static func pngData(_ cg: CGImage) -> Data? {
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, cg, nil)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return data as Data
+    }
+
     @discardableResult
-    func saveImage(_ image: NSImage, to directory: URL? = nil) -> URL? {
+    func savePNG(_ png: Data, to directory: URL? = nil) -> URL? {
         let dir = directory ?? saveDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = uniqueURL(in: dir, extension: "png")
-
-        guard let tiff = image.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let png = rep.representation(using: .png, properties: [:]) else { return nil }
-
         do {
             try png.write(to: url)
             return url
@@ -58,10 +65,25 @@ final class Storage {
         }
     }
 
-    func copyToClipboard(_ image: NSImage) {
+    @discardableResult
+    func saveImage(_ image: NSImage, to directory: URL? = nil) -> URL? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let png = Self.pngData(cg) else { return nil }
+        return savePNG(png, to: directory)
+    }
+
+    /// PNG only — every app that takes an image paste reads public.png, and
+    /// the TIFF that `writeObjects([NSImage])` adds is another full-size copy.
+    func copyToClipboard(png: Data) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([image])
+        pasteboard.setData(png, forType: .png)
+    }
+
+    func copyToClipboard(_ image: NSImage) {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let png = Self.pngData(cg) else { return }
+        copyToClipboard(png: png)
     }
 
     func makeVideoURL(extension ext: String = "mp4") -> URL {

@@ -61,15 +61,15 @@ final class QuickAccessOverlayController: NSWindowController, NSWindowDelegate {
             self.mixAudioToSingleTrack(state: state)
         }
         view.onContextEdit = { [weak self] in
-            guard let self, case .image(let image, _) = self.media else { return }
-            EditorWindowController.show(image: image)
+            guard let self, case .image = self.media else { return }
+            EditorWindowController.show(image: self.media.loadFullImage())
             self.dismissOverlay()
         }
         view.onContextCopyToClipboard = { [weak self] in
             guard let self else { return }
             switch self.media {
-            case .image(let image, _):
-                Storage.shared.copyToClipboard(image)
+            case .image:
+                Storage.shared.copyToClipboard(self.media.loadFullImage())
                 NotificationToast.show(message: "Image copied to clipboard")
             case .video(let state):
                 NSPasteboard.general.clearContents()
@@ -158,8 +158,8 @@ final class QuickAccessOverlayController: NSWindowController, NSWindowDelegate {
 
     private func handlePrimaryAction() {
         switch media {
-        case .image(let image, _):
-            EditorWindowController.show(image: image)
+        case .image:
+            EditorWindowController.show(image: media.loadFullImage())
             dismissOverlay()
         case .video(let state):
             // Opening a recording means the user chose to keep it. Move it
