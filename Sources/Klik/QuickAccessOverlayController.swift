@@ -153,7 +153,7 @@ final class QuickAccessOverlayController: NSWindowController, NSWindowDelegate {
 
     private func cleanupPendingTempFile() {
         guard case .video(let state) = media, state.isPendingSave else { return }
-        try? FileManager.default.removeItem(at: state.fileURL)
+        Storage.shared.discardRecording(at: state.fileURL)
     }
 
     private func handlePrimaryAction() {

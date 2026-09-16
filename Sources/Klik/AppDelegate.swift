@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         captureCoordinator = CaptureCoordinator()
+        captureCoordinator.restoreInterruptedRecordings()
         hotkeyManager = HotkeyManager()
         registerHotkeys()
     }

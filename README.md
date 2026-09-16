@@ -33,6 +33,7 @@ No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB
 - **Echo cancellation + audio mixdown** run automatically after every recording — the two tracks become one sharing-friendly AAC track, with the speaker echo removed from your mic
 - **Convert MP4 → GIF** (12 fps, optimized) in one click
 - Floating control bar with REC indicator, live timer, stop and cancel buttons
+- Crash recovery: recordings use fragmented MP4 and are offered for recovery on the next launch after a crash or force quit
 - Klik's own windows are excluded from the recording automatically
 
 ### 🗂 Quick Access Overlay

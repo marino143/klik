@@ -17,6 +17,28 @@ final class CaptureCoordinator {
         }
     }
 
+    func restoreInterruptedRecordings() {
+        let urls = Storage.shared.recoverableRecordingURLs()
+        guard !urls.isEmpty else { return }
+
+        Task {
+            var restored = 0
+            for url in urls {
+                let poster = await VideoPoster.firstFrame(of: url)
+                guard let poster else { continue }
+                let state = VideoMediaState(fileURL: url, poster: poster, isPendingSave: true)
+                QuickAccessOverlayController.show(media: .video(state))
+                restored += 1
+            }
+            if restored > 0 {
+                NotificationToast.show(
+                    message: "Recovered \(restored) interrupted recording\(restored == 1 ? "" : "s")",
+                    duration: 5
+                )
+            }
+        }
+    }
+
     var isRecording: Bool { recorder.isRecording }
 
     func captureFullScreen() {

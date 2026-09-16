@@ -86,6 +86,12 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             NSLog("Klik: AVAssetWriter init failed — \(error)")
             throw RecordingError.writerSetupFailed(error.localizedDescription)
         }
+        // Emit a self-contained movie fragment every second. A normal MP4 only
+        // writes its index when finishWriting() runs, so a hard crash loses the
+        // whole recording. Fragmented MP4 remains readable through the most
+        // recent completed fragment.
+        writer.movieFragmentInterval = CMTime(seconds: 1, preferredTimescale: 600)
+        writer.shouldOptimizeForNetworkUse = true
 
         // HEVC + ~1.5 bits/pixel + 6 Mbps cap. Screen content compresses
         // exceptionally well with HEVC; this matches HandBrake Fast 1080p30
@@ -196,7 +202,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             NSLog("Klik: startCapture FAILED — domain=\(e.domain) code=\(e.code) desc=\(e.localizedDescription) info=\(e.userInfo)")
             writer.finishWriting { }
             self.cleanupRecordingState()
-            try? FileManager.default.removeItem(at: fileURL)
+            Storage.shared.discardRecording(at: fileURL)
             throw RecordingError.streamStartFailed(e)
         }
 
@@ -329,7 +335,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             microphoneInput?.markAsFinished()
         }
         await writer.finishWriting()
-        try? FileManager.default.removeItem(at: url)
+        Storage.shared.discardRecording(at: url)
         cleanupRecordingState()
     }
 
@@ -417,9 +423,8 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         if let activeWriter {
             await activeWriter.finishWriting()
         }
-        if let outputURL {
-            try? FileManager.default.removeItem(at: outputURL)
-        }
+        // Keep the finalized file and its recovery marker so the next launch
+        // can offer it instead of deleting a usable partial recording.
         cleanupRecordingState()
         onUnexpectedStop?(RecordingError.recordingInterrupted(error))
     }

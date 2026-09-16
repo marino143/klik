@@ -92,11 +92,60 @@ final class Storage {
         return uniqueURL(in: dir, extension: ext)
     }
 
+    private var recordingRecoveryDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        return base.appendingPathComponent("Klik/Recording Recovery", isDirectory: true)
+    }
+
+    /// Recordings live outside /tmp and carry a sidecar until AVAssetWriter has
+    /// been finalized. Combined with fragmented MP4 output, this lets the next
+    /// launch recover everything through the last completed fragment after a
+    /// process crash or force quit.
     func makeTempVideoURL(extension ext: String = "mp4") -> URL {
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("Klik", isDirectory: true)
+        let tempDir = recordingRecoveryDirectory
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let filename = "Klik-rec-\(UUID().uuidString.prefix(8)).\(ext)"
-        return tempDir.appendingPathComponent(filename)
+        let url = tempDir.appendingPathComponent(filename)
+        FileManager.default.createFile(atPath: recoveryMarkerURL(for: url).path, contents: Data())
+        return url
+    }
+
+    func markRecordingFinished(at url: URL) {
+        try? FileManager.default.removeItem(at: recoveryMarkerURL(for: url))
+    }
+
+    func discardRecording(at url: URL) {
+        try? FileManager.default.removeItem(at: url)
+        markRecordingFinished(at: url)
+    }
+
+    func recoverableRecordingURLs() -> [URL] {
+        let directory = recordingRecoveryDirectory
+        guard let markers = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        return markers.compactMap { marker in
+            guard marker.pathExtension == "recover" else { return nil }
+            let video = marker.deletingPathExtension()
+            guard FileManager.default.fileExists(atPath: video.path),
+                  (try? video.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) ?? 0 > 0 else {
+                try? FileManager.default.removeItem(at: marker)
+                return nil
+            }
+            return video
+        }.sorted { lhs, rhs in
+            let left = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let right = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return left < right
+        }
+    }
+
+    private func recoveryMarkerURL(for videoURL: URL) -> URL {
+        URL(fileURLWithPath: videoURL.path + ".recover")
     }
 
     @discardableResult
@@ -106,6 +155,7 @@ final class Storage {
         let destURL = uniqueURL(in: dir, extension: sourceURL.pathExtension)
         do {
             try FileManager.default.moveItem(at: sourceURL, to: destURL)
+            markRecordingFinished(at: sourceURL)
             return destURL
         } catch {
             NSLog("Klik: moveVideoToFinalLocation failed — \(error)")
