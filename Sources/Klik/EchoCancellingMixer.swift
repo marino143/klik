@@ -39,7 +39,7 @@ enum EchoCancellingMixer {
         // order they're added in VideoRecordingManager.
         var systemSamples = try extractMonoFloat(asset: asset, track: audioTracks[0])
         var micSamples = try extractMonoFloat(asset: asset, track: audioTracks[1])
-        NSLog("Klik: AEC extracted system=\(systemSamples.count) mic=\(micSamples.count) samples")
+        KlikLog("Klik: AEC extracted system=\(systemSamples.count) mic=\(micSamples.count) samples")
 
         // Echo-cancel the mic using the system audio as reference.
         let canceller = EchoCanceller(filterLength: 2048, stepSize: 0.2)

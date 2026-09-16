@@ -16,7 +16,7 @@ enum VideoPoster {
             let cgImage = try await generator.image(at: time).image
             return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         } catch {
-            NSLog("Klik: poster frame failed — \(error)")
+            KlikLog("Klik: poster frame failed — \(error)")
             return nil
         }
     }

@@ -50,14 +50,14 @@ final class CaptureManager {
 
     func shareableContent() async throws -> SCShareableContent {
         if !CGPreflightScreenCaptureAccess() {
-            NSLog("Klik: CGPreflightScreenCaptureAccess returned false — requesting access prompt")
+            KlikLog("Klik: CGPreflightScreenCaptureAccess returned false — requesting access prompt")
             _ = CGRequestScreenCaptureAccess()
             throw CaptureError.noPermission
         }
         do {
             return try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch let error as NSError {
-            NSLog("Klik: SCShareableContent failed — domain=\(error.domain) code=\(error.code) desc=\(error.localizedDescription)")
+            KlikLog("Klik: SCShareableContent failed — domain=\(error.domain) code=\(error.code) desc=\(error.localizedDescription)")
             if error.code == -3801 || error.code == -3802 {
                 throw CaptureError.noPermission
             }
@@ -69,7 +69,7 @@ final class CaptureManager {
         do {
             return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
         } catch let error as NSError {
-            NSLog("Klik: captureImage failed — domain=\(error.domain) code=\(error.code) desc=\(error.localizedDescription)")
+            KlikLog("Klik: captureImage failed — domain=\(error.domain) code=\(error.code) desc=\(error.localizedDescription)")
             if error.code == -3801 || error.code == -3802 {
                 throw CaptureError.noPermission
             }

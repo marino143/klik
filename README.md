@@ -35,6 +35,7 @@ No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB
 - Floating control bar with REC indicator, live timer, stop and cancel buttons
 - Crash recovery: recordings use fragmented MP4 and are offered for recovery on the next launch after a crash or force quit
 - Built-in Sparkle updater with automatic checks and a **Check for Updates…** menu command
+- Local rotating error logs and **Export Diagnostics…** for user-controlled support bundles; no telemetry or automatic upload
 - Klik's own windows are excluded from the recording automatically
 
 ### 🗂 Quick Access Overlay

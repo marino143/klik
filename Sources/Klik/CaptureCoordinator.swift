@@ -283,7 +283,7 @@ final class CaptureCoordinator {
     private func handleRecordedVideo(at url: URL) async {
         let micGranted = MicrophoneAccess.isGranted
         let micSamples = recorder.microphoneSampleCount
-        NSLog("Klik: recording finished — micGranted=\(micGranted) micSampleCount=\(micSamples)")
+        KlikLog("Klik: recording finished — micGranted=\(micGranted) micSampleCount=\(micSamples)")
         if micGranted && micSamples == 0 {
             NotificationToast.show(message: "Warning: no microphone audio was captured", duration: 4)
         }
@@ -312,11 +312,11 @@ final class CaptureCoordinator {
             try await EchoCancellingMixer.process(inputURL: url, outputURL: mixedURL)
             try? FileManager.default.removeItem(at: url)
             try FileManager.default.moveItem(at: mixedURL, to: url)
-            NSLog("Klik: echo-cancelled + mixed audio into single track at \(url.path)")
+            KlikLog("Klik: echo-cancelled + mixed audio into single track at \(url.path)")
             return
         } catch {
             try? FileManager.default.removeItem(at: mixedURL)
-            NSLog("Klik: echo-cancel mix failed (\(error)); falling back to plain mix")
+            KlikLog("Klik: echo-cancel mix failed (\(error)); falling back to plain mix")
         }
 
         ProcessingHUD.shared.update(message: "Mixing audio…")
@@ -324,10 +324,10 @@ final class CaptureCoordinator {
             try await AudioMixer.mixAudioTracks(inputURL: url, outputURL: mixedURL)
             try? FileManager.default.removeItem(at: url)
             try FileManager.default.moveItem(at: mixedURL, to: url)
-            NSLog("Klik: plain-mixed audio into single track at \(url.path)")
+            KlikLog("Klik: plain-mixed audio into single track at \(url.path)")
         } catch {
             try? FileManager.default.removeItem(at: mixedURL)
-            NSLog("Klik: plain mix also failed, keeping original two-track audio — \(error)")
+            KlikLog("Klik: plain mix also failed, keeping original two-track audio — \(error)")
         }
     }
 

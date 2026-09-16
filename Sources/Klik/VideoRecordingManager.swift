@@ -57,7 +57,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         excludingApps: [SCRunningApplication] = []
     ) async throws -> URL {
         guard !isRecording else {
-            NSLog("Klik: startRecording called while already recording — ignoring")
+            KlikLog("Klik: startRecording called while already recording — ignoring")
             throw RecordingError.alreadyRecording
         }
 
@@ -74,16 +74,16 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             : 1.0
         let pixelWidth = max(2, Int(Double(nativeWidth) * scaleFactor) & ~1)   // even
         let pixelHeight = max(2, Int(Double(nativeHeight) * scaleFactor) & ~1) // even
-        NSLog("Klik: startRecording region=\(region) scale=\(scale) native=\(nativeWidth)x\(nativeHeight) output=\(pixelWidth)x\(pixelHeight)")
+        KlikLog("Klik: startRecording region=\(region) scale=\(scale) native=\(nativeWidth)x\(nativeHeight) output=\(pixelWidth)x\(pixelHeight)")
 
         let fileURL = Storage.shared.makeTempVideoURL()
-        NSLog("Klik: temp output URL = \(fileURL.path)")
+        KlikLog("Klik: temp output URL = \(fileURL.path)")
 
         let writer: AVAssetWriter
         do {
             writer = try AVAssetWriter(outputURL: fileURL, fileType: .mp4)
         } catch {
-            NSLog("Klik: AVAssetWriter init failed — \(error)")
+            KlikLog("Klik: AVAssetWriter init failed — \(error)")
             throw RecordingError.writerSetupFailed(error.localizedDescription)
         }
         // Emit a self-contained movie fragment every second. A normal MP4 only
@@ -98,7 +98,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         // size-wise without requiring a second compression pass.
         let computedBitrate = Int(Double(pixelWidth * pixelHeight) * 1.5)
         let bitrate = min(computedBitrate, 6_000_000)
-        NSLog("Klik: video bitrate = \(bitrate) bps (~\(bitrate / 1_000_000) Mbps), codec=HEVC")
+        KlikLog("Klik: video bitrate = \(bitrate) bps (~\(bitrate / 1_000_000) Mbps), codec=HEVC")
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.hevc,
             AVVideoWidthKey: pixelWidth,
@@ -128,7 +128,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         if writer.canAdd(systemAudio) {
             writer.add(systemAudio)
         } else {
-            NSLog("Klik: writer cannot add system audio input")
+            KlikLog("Klik: writer cannot add system audio input")
         }
 
         let micAudio = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
@@ -136,7 +136,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         if writer.canAdd(micAudio) {
             writer.add(micAudio)
         } else {
-            NSLog("Klik: writer cannot add mic audio input")
+            KlikLog("Klik: writer cannot add mic audio input")
         }
 
         let config = SCStreamConfiguration()
@@ -168,18 +168,18 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         do {
             try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: queue)
             try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: queue)
-            NSLog("Klik: addStreamOutput OK (screen + system audio)")
+            KlikLog("Klik: addStreamOutput OK (screen + system audio)")
         } catch let e as NSError {
-            NSLog("Klik: addStreamOutput FAILED — domain=\(e.domain) code=\(e.code) desc=\(e.localizedDescription)")
+            KlikLog("Klik: addStreamOutput FAILED — domain=\(e.domain) code=\(e.code) desc=\(e.localizedDescription)")
             throw RecordingError.streamStartFailed(e)
         }
 
         guard writer.startWriting() else {
             let werr = writer.error?.localizedDescription ?? "startWriting failed"
-            NSLog("Klik: writer.startWriting() returned false — \(werr)")
+            KlikLog("Klik: writer.startWriting() returned false — \(werr)")
             throw RecordingError.writerSetupFailed(werr)
         }
-        NSLog("Klik: writer.startWriting OK (writer status=\(writer.status.rawValue))")
+        KlikLog("Klik: writer.startWriting OK (writer status=\(writer.status.rawValue))")
 
         queue.sync {
             self.writer = writer
@@ -194,12 +194,12 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         self.outputURL = fileURL
 
         do {
-            NSLog("Klik: calling stream.startCapture()…")
+            KlikLog("Klik: calling stream.startCapture()…")
             try await stream.startCapture()
             self.startedAt = Date()
-            NSLog("Klik: stream.startCapture() OK — recording in progress")
+            KlikLog("Klik: stream.startCapture() OK — recording in progress")
         } catch let e as NSError {
-            NSLog("Klik: startCapture FAILED — domain=\(e.domain) code=\(e.code) desc=\(e.localizedDescription) info=\(e.userInfo)")
+            KlikLog("Klik: startCapture FAILED — domain=\(e.domain) code=\(e.code) desc=\(e.localizedDescription) info=\(e.userInfo)")
             writer.finishWriting { }
             self.cleanupRecordingState()
             Storage.shared.discardRecording(at: fileURL)
@@ -212,7 +212,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         if MicrophoneAccess.isGranted {
             startMicrophoneCapture()
         } else {
-            NSLog("Klik: microphone permission not granted, recording without voice")
+            KlikLog("Klik: microphone permission not granted, recording without voice")
         }
 
         return fileURL
@@ -232,7 +232,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         // the trade-off; headphones avoid it entirely.
 
         let format = inputNode.outputFormat(forBus: 0)
-        NSLog("Klik: mic format sampleRate=\(format.sampleRate) channels=\(format.channelCount)")
+        KlikLog("Klik: mic format sampleRate=\(format.sampleRate) channels=\(format.channelCount)")
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, time in
             guard let self else { return }
@@ -247,9 +247,9 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         do {
             try engine.start()
             self.micAudioEngine = engine
-            NSLog("Klik: AVAudioEngine for microphone started (clean, no voice processing)")
+            KlikLog("Klik: AVAudioEngine for microphone started (clean, no voice processing)")
         } catch {
-            NSLog("Klik: failed to start AVAudioEngine — \(error)")
+            KlikLog("Klik: failed to start AVAudioEngine — \(error)")
             inputNode.removeTap(onBus: 0)
         }
     }
@@ -440,7 +440,7 @@ private final class SendableSampleBuffer: @unchecked Sendable {
 
 extension VideoRecordingManager: SCStreamDelegate {
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        NSLog("Klik: SCStream stopped with error \(error)")
+        KlikLog("Klik: SCStream stopped with error \(error)")
         Task { @MainActor [weak self] in
             await self?.handleUnexpectedStop(error, from: stream)
         }

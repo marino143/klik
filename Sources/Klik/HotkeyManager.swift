@@ -43,7 +43,7 @@ final class HotkeyManager {
         )
 
         guard status == noErr, let ref = hotkeyRef else {
-            NSLog("Klik: hotkey registration failed (status: \(status))")
+            KlikLog("Klik: hotkey registration failed (status: \(status))")
             return
         }
 

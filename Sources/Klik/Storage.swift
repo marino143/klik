@@ -60,7 +60,7 @@ final class Storage {
             try png.write(to: url)
             return url
         } catch {
-            NSLog("Klik: failed to save image — \(error)")
+            KlikLog("Klik: failed to save image — \(error)")
             return nil
         }
     }
@@ -158,7 +158,7 @@ final class Storage {
             markRecordingFinished(at: sourceURL)
             return destURL
         } catch {
-            NSLog("Klik: moveVideoToFinalLocation failed — \(error)")
+            KlikLog("Klik: moveVideoToFinalLocation failed — \(error)")
             return nil
         }
     }

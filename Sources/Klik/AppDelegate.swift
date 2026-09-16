@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        DiagnosticsLogger.shared.start()
         setupStatusItem()
         captureCoordinator = CaptureCoordinator()
         captureCoordinator.restoreInterruptedRecordings()
@@ -44,6 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         updateItem.target = self
         menu.addItem(updateItem)
+        let diagnosticsItem = NSMenuItem(title: "Export Diagnostics…", action: #selector(exportDiagnostics), keyEquivalent: "")
+        diagnosticsItem.target = self
+        menu.addItem(diagnosticsItem)
         menu.addItem(NSMenuItem.separator())
         let coffeeItem = NSMenuItem(title: "Buy me a coffee ☕", action: #selector(openBuyMeACoffee), keyEquivalent: "")
         coffeeItem.target = self
@@ -101,6 +105,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func checkForUpdates() {
         updaterController.checkForUpdates(nil)
+    }
+
+    @objc private func exportDiagnostics() {
+        DiagnosticsExporter.export()
     }
 
     @objc private func openBuyMeACoffee() {
