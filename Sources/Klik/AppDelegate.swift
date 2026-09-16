@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import Sparkle
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -7,6 +8,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var hotkeyManager: HotkeyManager!
     private var captureCoordinator: CaptureCoordinator!
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -35,6 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(regionItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(makeMenuItem("Settings…", key: ",", action: #selector(openSettings)))
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
         menu.addItem(NSMenuItem.separator())
         let coffeeItem = NSMenuItem(title: "Buy me a coffee ☕", action: #selector(openBuyMeACoffee), keyEquivalent: "")
         coffeeItem.target = self
@@ -88,6 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         SettingsWindowController.shared.show()
+    }
+
+    @objc private func checkForUpdates() {
+        updaterController.checkForUpdates(nil)
     }
 
     @objc private func openBuyMeACoffee() {

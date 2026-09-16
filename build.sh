@@ -9,6 +9,7 @@ APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
 CONTENTS="${APP_BUNDLE}/Contents"
 MACOS_DIR="${CONTENTS}/MacOS"
 RES_DIR="${CONTENTS}/Resources"
+FRAMEWORKS_DIR="${CONTENTS}/Frameworks"
 
 CONFIG="${1:-release}"
 
@@ -28,9 +29,24 @@ fi
 
 echo "→ Assembling app bundle at ${APP_BUNDLE}…"
 rm -rf "${APP_BUNDLE}"
-mkdir -p "${MACOS_DIR}" "${RES_DIR}"
+mkdir -p "${MACOS_DIR}" "${RES_DIR}" "${FRAMEWORKS_DIR}"
 cp "${BIN_PATH}" "${MACOS_DIR}/${APP_NAME}"
 cp "${ROOT}/Resources/Info.plist" "${CONTENTS}/Info.plist"
+if ! otool -l "${MACOS_DIR}/${APP_NAME}" | grep -q '@executable_path/../Frameworks'; then
+    install_name_tool -add_rpath '@executable_path/../Frameworks' "${MACOS_DIR}/${APP_NAME}"
+fi
+SPARKLE_FRAMEWORK="${ROOT}/.build/arm64-apple-macosx/${CONFIG}/Sparkle.framework"
+if [[ ! -d "${SPARKLE_FRAMEWORK}" ]]; then
+    SPARKLE_FRAMEWORK="${ROOT}/.build/${CONFIG}/Sparkle.framework"
+fi
+if [[ ! -d "${SPARKLE_FRAMEWORK}" ]]; then
+    SPARKLE_FRAMEWORK="${ROOT}/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+fi
+if [[ ! -d "${SPARKLE_FRAMEWORK}" ]]; then
+    echo "❌ Sparkle.framework not found after Swift build" >&2
+    exit 1
+fi
+ditto "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/Sparkle.framework"
 if [[ -f "${ROOT}/Resources/Klik.icns" ]]; then
     cp "${ROOT}/Resources/Klik.icns" "${RES_DIR}/Klik.icns"
 fi

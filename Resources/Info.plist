@@ -36,5 +36,11 @@
     <string>Klik needs microphone access to record your voice in video recordings.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Klik uses Apple Events to interact with the system.</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/marino143/klik/main/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>PTH6rqOxqXZRWkA6tconvoQAVZhNasmqzwejoG4MKgI=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>

@@ -34,6 +34,7 @@ No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB
 - **Convert MP4 → GIF** (12 fps, optimized) in one click
 - Floating control bar with REC indicator, live timer, stop and cancel buttons
 - Crash recovery: recordings use fragmented MP4 and are offered for recovery on the next launch after a crash or force quit
+- Built-in Sparkle updater with automatic checks and a **Check for Updates…** menu command
 - Klik's own windows are excluded from the recording automatically
 
 ### 🗂 Quick Access Overlay
@@ -88,6 +89,9 @@ KLIK_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)" ./build.sh releas
 ```
 
 Notarisation needs App Store Connect credentials, stored once in your keychain (see the header of `release.sh`).
+The release script also signs the update with Sparkle's EdDSA key and regenerates
+`appcast.xml`; upload the ZIP to the matching GitHub Release, then commit and push
+the generated appcast as instructed by the script.
 
 To regenerate the app icon from the source script:
 

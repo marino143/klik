@@ -48,13 +48,26 @@ echo "→ Building…"
 "$HERE/build.sh" release >/dev/null
 
 # Developer ID signature, hardened runtime and a secure timestamp are what the
-# notary service requires; --deep is deliberately absent (Apple deprecated it
-# and the bundle has nothing nested to sign anyway).
+# notary service requires. Sign Sparkle's nested components explicitly from
+# the inside out; --deep is only used below for verification.
 echo "→ Signing with Developer ID…"
+SPARKLE_FRAMEWORK="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+SPARKLE_VERSION="$SPARKLE_FRAMEWORK/Versions/B"
+for component in \
+    "$SPARKLE_VERSION/Updater.app" \
+    "$SPARKLE_VERSION/XPCServices/Downloader.xpc" \
+    "$SPARKLE_VERSION/XPCServices/Installer.xpc" \
+    "$SPARKLE_VERSION/Autoupdate" \
+    "$SPARKLE_FRAMEWORK"
+do
+    codesign --force --options runtime --timestamp \
+        --preserve-metadata=identifier,entitlements \
+        --sign "$IDENTITY" "$component"
+done
 codesign --force --options runtime --timestamp \
     --entitlements "$ENTITLEMENTS" \
     --sign "$IDENTITY" "$APP_BUNDLE"
-codesign --verify --strict --verbose=2 "$APP_BUNDLE"
+codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 # ditto, not zip: it preserves the bundle metadata the notary service expects.
 echo "→ Packaging…"
@@ -90,7 +103,31 @@ ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$ZIP"
 echo "→ Verifying as Gatekeeper sees it…"
 spctl -a -vvv -t install "$APP_BUNDLE"
 
+echo "→ Generating signed Sparkle appcast…"
+SPARKLE_TOOLS="$HERE/.build/artifacts/sparkle/Sparkle/bin"
+UPDATES_DIR="$HERE/build/sparkle-updates"
+if [[ ! -x "$SPARKLE_TOOLS/generate_appcast" ]]; then
+    echo "✗ Sparkle generate_appcast tool not found at $SPARKLE_TOOLS" >&2
+    exit 1
+fi
+rm -rf "$UPDATES_DIR"
+mkdir -p "$UPDATES_DIR"
+cp "$ZIP" "$UPDATES_DIR/Klik.app.zip"
+if [[ -f "$HERE/appcast.xml" ]]; then
+    cp "$HERE/appcast.xml" "$UPDATES_DIR/appcast.xml"
+fi
+"$SPARKLE_TOOLS/generate_appcast" \
+    --account com.marino.klik \
+    --download-url-prefix "https://github.com/marino143/klik/releases/latest/download/" \
+    --link "https://codigit.io/apps/klik" \
+    --maximum-versions 1 \
+    --maximum-deltas 0 \
+    "$UPDATES_DIR"
+cp "$UPDATES_DIR/appcast.xml" "$HERE/appcast.xml"
+
 echo ""
 echo "✓ $ZIP is ready to upload as v$VERSION"
+echo "✓ $HERE/appcast.xml is signed and ready to commit"
 echo ""
 echo "  gh release upload v$VERSION \"$ZIP\" --clobber"
+echo "  git add appcast.xml && git commit -m 'Update appcast for v$VERSION' && git push"
