@@ -260,17 +260,9 @@ final class CaptureCoordinator {
         }
     }
 
-    private func cancelVideoRecording() {
-        Task {
-            await recorder.cancelRecording()
-            dismissControlBar()
-        }
-    }
-
     private func presentControlBar() {
         let bar = RecordingControlBar()
         bar.onStop = { [weak self] in self?.stopVideoRecording() }
-        bar.onCancel = { [weak self] in self?.cancelVideoRecording() }
         self.recordingControlBar = bar
         bar.present()
     }

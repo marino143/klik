@@ -3,7 +3,6 @@ import AppKit
 @MainActor
 final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     var onStop: (() -> Void)?
-    var onCancel: (() -> Void)?
 
     private let timerLabel = NSTextField(labelWithString: "00:00")
     private let recIndicator = NSView()
@@ -12,7 +11,7 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
 
     init() {
         let screen = NSScreen.main ?? NSScreen.screens.first!
-        let size = NSSize(width: 200, height: 38)
+        let size = NSSize(width: 168, height: 38)
         let frame = NSRect(
             x: screen.visibleFrame.midX - size.width / 2,
             y: screen.visibleFrame.maxY - size.height - 8,
@@ -86,16 +85,9 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
         stopButton.contentTintColor = .systemRed
         stopButton.translatesAutoresizingMaskIntoConstraints = false
 
-        let cancelButton = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Cancel")!, target: self, action: #selector(cancelTapped))
-        cancelButton.bezelStyle = .circular
-        cancelButton.isBordered = false
-        cancelButton.contentTintColor = NSColor.white.withAlphaComponent(0.8)
-        cancelButton.translatesAutoresizingMaskIntoConstraints = false
-
         container.addSubview(recIndicator)
         container.addSubview(timerLabel)
         container.addSubview(stopButton)
-        container.addSubview(cancelButton)
 
         NSLayoutConstraint.activate([
             recIndicator.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
@@ -106,15 +98,10 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
             timerLabel.leadingAnchor.constraint(equalTo: recIndicator.trailingAnchor, constant: 8),
             timerLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
 
-            stopButton.trailingAnchor.constraint(equalTo: cancelButton.leadingAnchor, constant: -4),
+            stopButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
             stopButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             stopButton.widthAnchor.constraint(equalToConstant: 28),
             stopButton.heightAnchor.constraint(equalToConstant: 28),
-
-            cancelButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
-            cancelButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            cancelButton.widthAnchor.constraint(equalToConstant: 22),
-            cancelButton.heightAnchor.constraint(equalToConstant: 22),
         ])
 
         startBlinkAnimation()
@@ -154,5 +141,4 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func stopTapped() { onStop?() }
-    @objc private func cancelTapped() { onCancel?() }
 }
