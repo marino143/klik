@@ -6,14 +6,14 @@
         <description>Secure updates for Klik.</description>
         <language>en</language>
         <item>
-            <title>0.2.4</title>
-            <pubDate>Thu, 17 Sep 2026 10:35:04 +0200</pubDate>
+            <title>0.2.5</title>
+            <pubDate>Thu, 17 Sep 2026 11:57:49 +0200</pubDate>
             <link>https://codigit.io/apps/klik</link>
-            <sparkle:version>6</sparkle:version>
-            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/marino143/klik/releases/latest/download/Klik.app.zip" length="1638984" type="application/octet-stream" sparkle:edSignature="pMqudJGkdpPv3ngyCPaMgXdADrEY/uyX163eEAPkXZAA5wdXW+DuFCY6t7roePCenWuBhtwGtEjTQB6GOFo1Bg=="/>
+            <enclosure url="https://github.com/marino143/klik/releases/latest/download/Klik.app.zip" length="1636776" type="application/octet-stream" sparkle:edSignature="tKlINtsd3gw9hVfhFgG7QixZhWNshfFbBW7Lv7K8Akx57xJdPWqdaByfL+rX6Y94XDUWJU8E+ABYXtf/jSxoBg=="/>
         </item>
     </channel>
 </rss>
