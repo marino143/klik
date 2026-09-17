@@ -1,9 +1,19 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>Klik Updates</title>
-    <link>https://codigit.io/apps/klik</link>
-    <description>Secure updates for Klik.</description>
-    <language>en</language>
-  </channel>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Klik Updates</title>
+        <link>https://codigit.io/apps/klik</link>
+        <description>Secure updates for Klik.</description>
+        <language>en</language>
+        <item>
+            <title>0.2.4</title>
+            <pubDate>Thu, 17 Sep 2026 10:35:04 +0200</pubDate>
+            <link>https://codigit.io/apps/klik</link>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>0.2.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/marino143/klik/releases/latest/download/Klik.app.zip" length="1638984" type="application/octet-stream" sparkle:edSignature="pMqudJGkdpPv3ngyCPaMgXdADrEY/uyX163eEAPkXZAA5wdXW+DuFCY6t7roePCenWuBhtwGtEjTQB6GOFo1Bg=="/>
+        </item>
+    </channel>
 </rss>
