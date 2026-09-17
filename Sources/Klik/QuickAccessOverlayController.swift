@@ -132,7 +132,7 @@ final class QuickAccessOverlayController: NSWindowController, NSWindowDelegate {
 
     func dismissOverlay() {
         guard let window = self.window else { return }
-        cleanupPendingTempFile()
+        savePendingRecording()
         Self.stack.removeAll { $0 === self }
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.18
@@ -146,14 +146,22 @@ final class QuickAccessOverlayController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        cleanupPendingTempFile()
+        savePendingRecording()
         Self.stack.removeAll { $0 === self }
         Self.layoutStack()
     }
 
-    private func cleanupPendingTempFile() {
+    private func savePendingRecording() {
         guard case .video(let state) = media, state.isPendingSave else { return }
-        Storage.shared.discardRecording(at: state.fileURL)
+        guard let newURL = Storage.shared.moveVideoToFinalLocation(from: state.fileURL) else {
+            KlikLog("Klik: preview closed but recording could not be auto-saved; keeping recovery file at \(state.fileURL.path)")
+            NotificationToast.show(message: "Recording kept for recovery because saving failed", duration: 5)
+            return
+        }
+        state.fileURL = newURL
+        state.isPendingSave = false
+        KlikLog("Klik: preview closed; recording auto-saved at \(newURL.path)")
+        NotificationToast.show(message: "Recording saved: \(newURL.lastPathComponent)")
     }
 
     private func handlePrimaryAction() {
