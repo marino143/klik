@@ -3,15 +3,18 @@ import AppKit
 @MainActor
 final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     var onStop: (() -> Void)?
+    var onMicrophoneChange: ((Bool) -> Void)?
 
     private let timerLabel = NSTextField(labelWithString: "00:00")
     private let recIndicator = NSView()
+    private let microphoneButton = NSButton()
+    private var isMicrophoneEnabled = false
     private var ticker: Timer?
     private var startedAt: Date?
 
     init() {
         let screen = NSScreen.main ?? NSScreen.screens.first!
-        let size = NSSize(width: 168, height: 38)
+        let size = NSSize(width: 204, height: 38)
         let frame = NSRect(
             x: screen.visibleFrame.midX - size.width / 2,
             y: screen.visibleFrame.maxY - size.height - 8,
@@ -85,8 +88,16 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
         stopButton.contentTintColor = .systemRed
         stopButton.translatesAutoresizingMaskIntoConstraints = false
 
+        microphoneButton.target = self
+        microphoneButton.action = #selector(microphoneTapped)
+        microphoneButton.bezelStyle = .circular
+        microphoneButton.isBordered = false
+        microphoneButton.translatesAutoresizingMaskIntoConstraints = false
+        updateMicrophoneButton()
+
         container.addSubview(recIndicator)
         container.addSubview(timerLabel)
+        container.addSubview(microphoneButton)
         container.addSubview(stopButton)
 
         NSLayoutConstraint.activate([
@@ -97,6 +108,11 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
 
             timerLabel.leadingAnchor.constraint(equalTo: recIndicator.trailingAnchor, constant: 8),
             timerLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+
+            microphoneButton.trailingAnchor.constraint(equalTo: stopButton.leadingAnchor, constant: -6),
+            microphoneButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            microphoneButton.widthAnchor.constraint(equalToConstant: 28),
+            microphoneButton.heightAnchor.constraint(equalToConstant: 28),
 
             stopButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
             stopButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
@@ -141,4 +157,19 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func stopTapped() { onStop?() }
+
+    @objc private func microphoneTapped() {
+        isMicrophoneEnabled.toggle()
+        updateMicrophoneButton()
+        onMicrophoneChange?(isMicrophoneEnabled)
+    }
+
+    private func updateMicrophoneButton() {
+        let symbolName = isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill"
+        let label = isMicrophoneEnabled ? "Mute microphone" : "Turn on microphone"
+        microphoneButton.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: label)
+        microphoneButton.contentTintColor = isMicrophoneEnabled ? .white : .secondaryLabelColor
+        microphoneButton.toolTip = label
+        microphoneButton.setAccessibilityLabel(label)
+    }
 }

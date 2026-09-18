@@ -263,6 +263,9 @@ final class CaptureCoordinator {
     private func presentControlBar() {
         let bar = RecordingControlBar()
         bar.onStop = { [weak self] in self?.stopVideoRecording() }
+        bar.onMicrophoneChange = { [weak self] enabled in
+            self?.recorder.setMicrophoneEnabled(enabled)
+        }
         self.recordingControlBar = bar
         bar.present()
     }

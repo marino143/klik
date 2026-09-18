@@ -33,6 +33,8 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private var systemAudioInput: AVAssetWriterInput?
     private var microphoneInput: AVAssetWriterInput?
     private var micAudioEngine: AVAudioEngine?
+    private let microphoneStateLock = NSLock()
+    private var microphoneEnabledValue = false
     private var firstFrameTime: CMTime?
     private(set) var outputURL: URL?
     private(set) var startedAt: Date?
@@ -47,6 +49,17 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     }
 
     var isRecording: Bool { stream != nil }
+
+    var isMicrophoneEnabled: Bool {
+        microphoneStateLock.withLock { microphoneEnabledValue }
+    }
+
+    func setMicrophoneEnabled(_ enabled: Bool) {
+        microphoneStateLock.withLock {
+            microphoneEnabledValue = enabled
+        }
+        KlikLog("Klik: microphone \(enabled ? "enabled" : "muted") by user")
+    }
 
     @MainActor
     func startRecording(
@@ -189,6 +202,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             self.firstFrameTime = nil
             self.microphoneSampleCountValue = 0
         }
+        setMicrophoneEnabled(false)
         self.stream = stream
         self.streamOutput = output
         self.outputURL = fileURL
@@ -236,6 +250,13 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, time in
             guard let self else { return }
+            if !self.isMicrophoneEnabled {
+                let buffers = UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList)
+                for audioBuffer in buffers {
+                    guard let data = audioBuffer.mData else { continue }
+                    memset(data, 0, Int(audioBuffer.mDataByteSize))
+                }
+            }
             if let sb = self.cmSampleBuffer(from: buffer, at: time) {
                 let sample = SendableSampleBuffer(sb)
                 self.queue.async {
@@ -406,6 +427,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             firstFrameTime = nil
         }
         micAudioEngine = nil
+        setMicrophoneEnabled(false)
         startedAt = nil
     }
 
