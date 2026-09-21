@@ -50,6 +50,7 @@ ditto "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/Sparkle.framework"
 if [[ -f "${ROOT}/Resources/Klik.icns" ]]; then
     cp "${ROOT}/Resources/Klik.icns" "${RES_DIR}/Klik.icns"
 fi
+cp "${ROOT}/Sources/CWebRTCAEC3/LICENSE.webrtc-aec3" "${RES_DIR}/WebRTC-AEC3-LICENSE.txt"
 
 SIGN_IDENTITY="${KLIK_SIGN_IDENTITY:-Apple Development: Marino Glazar (63XD6KB5ZN)}"
 echo "→ Signing with: ${SIGN_IDENTITY}"

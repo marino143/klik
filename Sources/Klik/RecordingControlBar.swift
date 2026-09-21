@@ -4,17 +4,20 @@ import AppKit
 final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     var onStop: (() -> Void)?
     var onMicrophoneChange: ((Bool) -> Void)?
+    var onAudioModeChange: ((RecordingAudioMode) -> Void)?
 
     private let timerLabel = NSTextField(labelWithString: "00:00")
     private let recIndicator = NSView()
     private let microphoneButton = NSButton()
-    private var isMicrophoneEnabled = false
+    private let audioModeButton = NSButton()
+    private var isMicrophoneEnabled = true
+    private var audioMode: RecordingAudioMode = .speakers
     private var ticker: Timer?
     private var startedAt: Date?
 
     init() {
         let screen = NSScreen.main ?? NSScreen.screens.first!
-        let size = NSSize(width: 204, height: 38)
+        let size = NSSize(width: 238, height: 38)
         let frame = NSRect(
             x: screen.visibleFrame.midX - size.width / 2,
             y: screen.visibleFrame.maxY - size.height - 8,
@@ -95,9 +98,17 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
         microphoneButton.translatesAutoresizingMaskIntoConstraints = false
         updateMicrophoneButton()
 
+        audioModeButton.target = self
+        audioModeButton.action = #selector(audioModeTapped)
+        audioModeButton.bezelStyle = .circular
+        audioModeButton.isBordered = false
+        audioModeButton.translatesAutoresizingMaskIntoConstraints = false
+        updateAudioModeButton()
+
         container.addSubview(recIndicator)
         container.addSubview(timerLabel)
         container.addSubview(microphoneButton)
+        container.addSubview(audioModeButton)
         container.addSubview(stopButton)
 
         NSLayoutConstraint.activate([
@@ -109,10 +120,15 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
             timerLabel.leadingAnchor.constraint(equalTo: recIndicator.trailingAnchor, constant: 8),
             timerLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
 
-            microphoneButton.trailingAnchor.constraint(equalTo: stopButton.leadingAnchor, constant: -6),
+            microphoneButton.trailingAnchor.constraint(equalTo: audioModeButton.leadingAnchor, constant: -6),
             microphoneButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
             microphoneButton.widthAnchor.constraint(equalToConstant: 28),
             microphoneButton.heightAnchor.constraint(equalToConstant: 28),
+
+            audioModeButton.trailingAnchor.constraint(equalTo: stopButton.leadingAnchor, constant: -6),
+            audioModeButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            audioModeButton.widthAnchor.constraint(equalToConstant: 28),
+            audioModeButton.heightAnchor.constraint(equalToConstant: 28),
 
             stopButton.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
             stopButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
@@ -164,6 +180,12 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
         onMicrophoneChange?(isMicrophoneEnabled)
     }
 
+    @objc private func audioModeTapped() {
+        audioMode = audioMode == .speakers ? .headphones : .speakers
+        updateAudioModeButton()
+        onAudioModeChange?(audioMode)
+    }
+
     private func updateMicrophoneButton() {
         let symbolName = isMicrophoneEnabled ? "mic.fill" : "mic.slash.fill"
         let label = isMicrophoneEnabled ? "Mute microphone" : "Turn on microphone"
@@ -171,5 +193,17 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
         microphoneButton.contentTintColor = isMicrophoneEnabled ? .white : .secondaryLabelColor
         microphoneButton.toolTip = label
         microphoneButton.setAccessibilityLabel(label)
+    }
+
+    private func updateAudioModeButton() {
+        let isHeadphones = audioMode == .headphones
+        let symbolName = isHeadphones ? "headphones" : "speaker.wave.2.fill"
+        let label = isHeadphones
+            ? "Headphones mode. Echo cancellation is off."
+            : "Speaker mode. Echo cancellation is on."
+        audioModeButton.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: label)
+        audioModeButton.contentTintColor = isHeadphones ? .systemBlue : .white
+        audioModeButton.toolTip = label
+        audioModeButton.setAccessibilityLabel(label)
     }
 }

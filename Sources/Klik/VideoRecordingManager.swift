@@ -23,6 +23,11 @@ enum RecordingError: Error, LocalizedError {
     }
 }
 
+enum RecordingAudioMode: Equatable, Sendable {
+    case speakers
+    case headphones
+}
+
 final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.marino.klik.recording.queue", qos: .userInitiated)
 
@@ -34,7 +39,8 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private var microphoneInput: AVAssetWriterInput?
     private var micAudioEngine: AVAudioEngine?
     private let microphoneStateLock = NSLock()
-    private var microphoneEnabledValue = false
+    private var microphoneEnabledValue = true
+    private var audioModeValue: RecordingAudioMode = .speakers
     private var firstFrameTime: CMTime?
     private(set) var outputURL: URL?
     private(set) var startedAt: Date?
@@ -54,11 +60,22 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         microphoneStateLock.withLock { microphoneEnabledValue }
     }
 
+    var audioMode: RecordingAudioMode {
+        microphoneStateLock.withLock { audioModeValue }
+    }
+
     func setMicrophoneEnabled(_ enabled: Bool) {
         microphoneStateLock.withLock {
             microphoneEnabledValue = enabled
         }
         KlikLog("Klik: microphone \(enabled ? "enabled" : "muted") by user")
+    }
+
+    func setAudioMode(_ mode: RecordingAudioMode) {
+        microphoneStateLock.withLock {
+            audioModeValue = mode
+        }
+        KlikLog("Klik: audio mode set to \(mode == .headphones ? "headphones" : "speakers")")
     }
 
     @MainActor
@@ -202,7 +219,8 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             self.firstFrameTime = nil
             self.microphoneSampleCountValue = 0
         }
-        setMicrophoneEnabled(false)
+        setMicrophoneEnabled(true)
+        setAudioMode(.speakers)
         self.stream = stream
         self.streamOutput = output
         self.outputURL = fileURL
@@ -241,9 +259,8 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         // also switches the whole shared audio I/O into "voice chat" mode,
         // which compresses/degrades the system-audio output path that
         // SCStream captures — making the other meeting participant sound
-        // tinny/compressed. Plain capture keeps both the mic and the system
-        // audio clean. The acoustic echo when recording without headphones is
-        // the trade-off; headphones avoid it entirely.
+        // tinny/compressed. Plain capture keeps both tracks clean; WebRTC AEC3
+        // removes speaker echo later without changing the live output path.
 
         let format = inputNode.outputFormat(forBus: 0)
         KlikLog("Klik: mic format sampleRate=\(format.sampleRate) channels=\(format.channelCount)")
@@ -427,7 +444,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             firstFrameTime = nil
         }
         micAudioEngine = nil
-        setMicrophoneEnabled(false)
+        setMicrophoneEnabled(true)
         startedAt = nil
     }
 

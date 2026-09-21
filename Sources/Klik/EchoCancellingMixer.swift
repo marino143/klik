@@ -5,6 +5,7 @@ import CoreMedia
 enum EchoCancellingMixerError: Error, LocalizedError {
     case noVideoTrack
     case fewerThanTwoAudioTracks
+    case noAudioSamples
     case readerSetup(String)
     case writerSetup(String)
     case failed(String)
@@ -13,6 +14,7 @@ enum EchoCancellingMixerError: Error, LocalizedError {
         switch self {
         case .noVideoTrack:            return "No video track in MP4."
         case .fewerThanTwoAudioTracks: return "Need two audio tracks (system + mic) to echo-cancel."
+        case .noAudioSamples:          return "The recording contains no readable audio samples."
         case .readerSetup(let m):      return "Reader setup: \(m)"
         case .writerSetup(let m):      return "Writer setup: \(m)"
         case .failed(let m):           return m
@@ -20,13 +22,13 @@ enum EchoCancellingMixerError: Error, LocalizedError {
     }
 }
 
-/// Removes acoustic echo from the mic track using the system-audio track as a
-/// reference (NLMS), then mixes the cleaned mic with the system audio into a
-/// single track. Video is passed through without re-encoding.
+/// Aligns the system and microphone tracks on their original media timeline,
+/// optionally removes acoustic echo with WebRTC AEC3, then creates one mixed
+/// audio track. Video is passed through without re-encoding.
 enum EchoCancellingMixer {
     private static let sampleRate: Double = 48000
 
-    static func process(inputURL: URL, outputURL: URL) async throws {
+    static func process(inputURL: URL, outputURL: URL, echoCancellationEnabled: Bool) async throws {
         let asset = AVURLAsset(url: inputURL)
 
         let videoTracks = try await asset.loadTracks(withMediaType: .video)
@@ -37,13 +39,23 @@ enum EchoCancellingMixer {
 
         // Track 0 = system audio (reference), track 1 = microphone — matches the
         // order they're added in VideoRecordingManager.
-        var systemSamples = try extractMonoFloat(asset: asset, track: audioTracks[0])
-        var micSamples = try extractMonoFloat(asset: asset, track: audioTracks[1])
-        KlikLog("Klik: AEC extracted system=\(systemSamples.count) mic=\(micSamples.count) samples")
+        let systemChunks = try extractMonoChunks(asset: asset, track: audioTracks[0])
+        let micChunks = try extractMonoChunks(asset: asset, track: audioTracks[1])
+        var (systemSamples, micSamples, startOffset) = try align(
+            systemChunks: systemChunks,
+            micChunks: micChunks
+        )
+        KlikLog("Klik: aligned audio system=\(systemSamples.count) mic=\(micSamples.count) samples micOffset=\(startOffset) samples")
 
-        // Echo-cancel the mic using the system audio as reference.
-        let canceller = EchoCanceller(filterLength: 2048, stepSize: 0.2)
-        let cleanedMic = canceller.process(reference: systemSamples, mic: micSamples)
+        let cleanedMic: [Float]
+        if echoCancellationEnabled {
+            let canceller = EchoCanceller(sampleRate: Int32(sampleRate))
+            cleanedMic = try canceller.process(reference: systemSamples, mic: micSamples)
+            KlikLog("Klik: WebRTC AEC3 processed \(cleanedMic.count) microphone samples")
+        } else {
+            cleanedMic = micSamples
+            KlikLog("Klik: headphones mode, WebRTC AEC3 bypassed")
+        }
         micSamples = []
 
         // Mix cleaned mic + system audio (clip to [-1, 1]).
@@ -63,7 +75,12 @@ enum EchoCancellingMixer {
 
     // MARK: - Audio extraction
 
-    private static func extractMonoFloat(asset: AVAsset, track: AVAssetTrack) throws -> [Float] {
+    struct AudioChunk {
+        let startSeconds: Double
+        let samples: [Float]
+    }
+
+    private static func extractMonoChunks(asset: AVAsset, track: AVAssetTrack) throws -> [AudioChunk] {
         let reader: AVAssetReader
         do { reader = try AVAssetReader(asset: asset) }
         catch { throw EchoCancellingMixerError.readerSetup(error.localizedDescription) }
@@ -86,21 +103,73 @@ enum EchoCancellingMixer {
             throw EchoCancellingMixerError.readerSetup(reader.error?.localizedDescription ?? "startReading")
         }
 
-        var samples: [Float] = []
+        var chunks: [AudioChunk] = []
         while let buffer = output.copyNextSampleBuffer() {
             if let block = CMSampleBufferGetDataBuffer(buffer) {
                 let length = CMBlockBufferGetDataLength(block)
                 let floatCount = length / MemoryLayout<Float>.size
                 var chunk = [Float](repeating: 0, count: floatCount)
-                CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: length, destination: &chunk)
-                samples.append(contentsOf: chunk)
+                let status = CMBlockBufferCopyDataBytes(
+                    block,
+                    atOffset: 0,
+                    dataLength: length,
+                    destination: &chunk
+                )
+                let startSeconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(buffer))
+                if status == noErr, startSeconds.isFinite, !chunk.isEmpty {
+                    chunks.append(AudioChunk(startSeconds: startSeconds, samples: chunk))
+                }
             }
             CMSampleBufferInvalidate(buffer)
         }
         if reader.status == .failed {
             throw EchoCancellingMixerError.failed(reader.error?.localizedDescription ?? "audio read failed")
         }
-        return samples
+        guard !chunks.isEmpty else { throw EchoCancellingMixerError.noAudioSamples }
+        return chunks
+    }
+
+    static func align(
+        systemChunks: [AudioChunk],
+        micChunks: [AudioChunk]
+    ) throws -> (system: [Float], mic: [Float], micStartOffset: Int) {
+        guard let firstSystem = systemChunks.first, let firstMic = micChunks.first else {
+            throw EchoCancellingMixerError.noAudioSamples
+        }
+
+        let timelineStart = min(firstSystem.startSeconds, firstMic.startSeconds)
+        let systemEnd = systemChunks.map {
+            $0.startSeconds + Double($0.samples.count) / sampleRate
+        }.max() ?? timelineStart
+        let micEnd = micChunks.map {
+            $0.startSeconds + Double($0.samples.count) / sampleRate
+        }.max() ?? timelineStart
+        let sampleCount = max(1, Int(ceil((max(systemEnd, micEnd) - timelineStart) * sampleRate)))
+
+        var system = [Float](repeating: 0, count: sampleCount)
+        var mic = [Float](repeating: 0, count: sampleCount)
+        place(chunks: systemChunks, timelineStart: timelineStart, into: &system)
+        place(chunks: micChunks, timelineStart: timelineStart, into: &mic)
+
+        let micStartOffset = Int(((firstMic.startSeconds - firstSystem.startSeconds) * sampleRate).rounded())
+        return (system, mic, micStartOffset)
+    }
+
+    private static func place(chunks: [AudioChunk], timelineStart: Double, into samples: inout [Float]) {
+        let destinationCount = samples.count
+        samples.withUnsafeMutableBufferPointer { destination in
+            guard let destinationBase = destination.baseAddress else { return }
+            for chunk in chunks {
+                let rawOffset = Int(((chunk.startSeconds - timelineStart) * sampleRate).rounded())
+                let offset = max(0, rawOffset)
+                let copyCount = min(chunk.samples.count, destinationCount - offset)
+                guard copyCount > 0 else { continue }
+                chunk.samples.withUnsafeBufferPointer { source in
+                    guard let sourceBase = source.baseAddress else { return }
+                    destinationBase.advanced(by: offset).update(from: sourceBase, count: copyCount)
+                }
+            }
+        }
     }
 
     // MARK: - Mux (video passthrough + mixed audio)

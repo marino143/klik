@@ -1,92 +1,90 @@
+import CWebRTCAEC3
 import Foundation
-import Accelerate
 
-/// Time-domain NLMS (normalized least-mean-squares) adaptive echo canceller.
-///
-/// Given a `reference` signal (the clean system audio that was playing through
-/// the speakers) and a `mic` signal (the user's voice plus the acoustic echo
-/// of those speakers picked up by the microphone), it adaptively estimates the
-/// echo path and subtracts the echo from the mic, leaving mostly the user's
-/// voice.
-///
-/// This runs entirely in post-processing on the two already-recorded audio
-/// tracks, so unlike macOS voice processing (VPIO) it never touches the live
-/// audio I/O and never degrades the system-audio recording.
+enum EchoCancellerError: Error, LocalizedError {
+    case initializationFailed
+    case invalidFrameSize
+    case processingFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .initializationFailed: return "WebRTC AEC3 could not be initialized."
+        case .invalidFrameSize: return "WebRTC AEC3 returned an invalid frame size."
+        case .processingFailed: return "WebRTC AEC3 failed while processing audio."
+        }
+    }
+}
+
+/// Offline WebRTC AEC3 processing. The clean system track is the render
+/// reference; the microphone track is capture audio containing voice and room
+/// echo. Input tracks must already share the same 48 kHz timeline.
 final class EchoCanceller {
-    private let filterLength: Int
-    private let mu: Float            // NLMS step size (0..1)
-    private let eps: Float = 1e-6    // regularization
-    private let leak: Float          // weight leakage (slightly < 1 for stability)
+    private let sampleRate: Int32
 
-    // Double-talk detector (Geigel): when the mic level approaches the recent
-    // reference level, the user is likely speaking, so we freeze adaptation
-    // (but keep subtracting the current estimate) to avoid cancelling speech.
-    private let dtThreshold: Float
-    private let dtHangoverSamples: Int
-
-    init(filterLength: Int = 2048,
-         stepSize: Float = 0.2,
-         doubleTalkThreshold: Float = 0.5,
-         doubleTalkHangoverSamples: Int = 4800) {
-        self.filterLength = filterLength
-        self.mu = stepSize
-        self.leak = 0.99999
-        self.dtThreshold = doubleTalkThreshold
-        self.dtHangoverSamples = doubleTalkHangoverSamples
+    init(sampleRate: Int32 = 48_000) {
+        self.sampleRate = sampleRate
     }
 
-    /// Process whole mono signals. `reference` and `mic` must be time-aligned
-    /// at the same sample rate. Returns the cleaned mic (echo removed).
-    func process(reference: [Float], mic: [Float]) -> [Float] {
-        let n = min(reference.count, mic.count)
-        guard n > 0 else { return mic }
-        let L = filterLength
+    func process(reference: [Float], mic: [Float]) throws -> [Float] {
+        let sampleCount = min(reference.count, mic.count)
+        guard sampleCount > 0 else { return [] }
+        guard let processor = klik_aec3_create(sampleRate) else {
+            throw EchoCancellerError.initializationFailed
+        }
+        defer { klik_aec3_destroy(processor) }
 
-        var output = [Float](repeating: 0, count: n)
-        var weights = [Float](repeating: 0, count: L)
+        let frameSize = Int(klik_aec3_frame_size(processor))
+        guard frameSize > 0 else { throw EchoCancellerError.invalidFrameSize }
 
-        // Front-pad the reference with L-1 zeros so a length-L window ending at
-        // sample i is paddedRef[i ..< i+L].
-        var paddedRef = [Float](repeating: 0, count: L - 1 + n)
-        for i in 0..<n { paddedRef[L - 1 + i] = reference[i] }
+        var output = [Float](repeating: 0, count: sampleCount)
+        var paddedRender = [Float](repeating: 0, count: frameSize)
+        var paddedCapture = [Float](repeating: 0, count: frameSize)
+        var paddedOutput = [Float](repeating: 0, count: frameSize)
 
-        var hangover = 0
+        try reference.withUnsafeBufferPointer { renderPointer in
+            try mic.withUnsafeBufferPointer { capturePointer in
+                try output.withUnsafeMutableBufferPointer { outputPointer in
+                    var offset = 0
+                    while offset < sampleCount {
+                        let available = min(frameSize, sampleCount - offset)
+                        let result: Int32
 
-        weights.withUnsafeMutableBufferPointer { w in
-            paddedRef.withUnsafeBufferPointer { rp in
-                let wBase = w.baseAddress!
-                let rBase = rp.baseAddress!
-                for i in 0..<n {
-                    let xPtr = rBase + i // window paddedRef[i ..< i+L]
-
-                    // Echo estimate y = w · x
-                    var y: Float = 0
-                    vDSP_dotpr(wBase, 1, xPtr, 1, &y, vDSP_Length(L))
-
-                    let d = mic[i]
-                    let e = d - y
-                    output[i] = e
-
-                    // Geigel double-talk detection
-                    var maxRef: Float = 0
-                    vDSP_maxmgv(xPtr, 1, &maxRef, vDSP_Length(L))
-                    if maxRef > 1e-5 && abs(d) > dtThreshold * maxRef {
-                        hangover = dtHangoverSamples
-                    } else if hangover > 0 {
-                        hangover -= 1
-                    }
-
-                    // NLMS update (skip while in double-talk)
-                    if hangover == 0 {
-                        var energy: Float = 0
-                        vDSP_svesq(xPtr, 1, &energy, vDSP_Length(L))
-                        var scale = mu * e / (energy + eps)
-                        // optional leakage for numerical stability
-                        if leak != 1.0 {
-                            var lk = leak
-                            vDSP_vsmul(wBase, 1, &lk, wBase, 1, vDSP_Length(L))
+                        if available == frameSize {
+                            result = klik_aec3_process_frame(
+                                processor,
+                                renderPointer.baseAddress?.advanced(by: offset),
+                                capturePointer.baseAddress?.advanced(by: offset),
+                                outputPointer.baseAddress?.advanced(by: offset),
+                                frameSize
+                            )
+                        } else {
+                            paddedRender = [Float](repeating: 0, count: frameSize)
+                            paddedCapture = [Float](repeating: 0, count: frameSize)
+                            paddedOutput = [Float](repeating: 0, count: frameSize)
+                            for index in 0..<available {
+                                paddedRender[index] = renderPointer[offset + index]
+                                paddedCapture[index] = capturePointer[offset + index]
+                            }
+                            result = paddedRender.withUnsafeBufferPointer { renderFrame in
+                                paddedCapture.withUnsafeBufferPointer { captureFrame in
+                                    paddedOutput.withUnsafeMutableBufferPointer { outputFrame in
+                                        klik_aec3_process_frame(
+                                            processor,
+                                            renderFrame.baseAddress,
+                                            captureFrame.baseAddress,
+                                            outputFrame.baseAddress,
+                                            frameSize
+                                        )
+                                    }
+                                }
+                            }
+                            for index in 0..<available {
+                                outputPointer[offset + index] = paddedOutput[index]
+                            }
                         }
-                        vDSP_vsma(xPtr, 1, &scale, wBase, 1, wBase, 1, vDSP_Length(L))
+
+                        guard result == 1 else { throw EchoCancellerError.processingFailed }
+                        offset += available
                     }
                 }
             }

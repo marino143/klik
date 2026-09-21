@@ -17,7 +17,7 @@
 
 **Klik** is a lightweight macOS screen capture and recording utility inspired by CleanShot.
 It lives in your menu bar, captures screenshots and video, and gets out of your way.
-No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB binary).
+No subscription, no telemetry, no Electron. Just a small native Apple Silicon app.
 
 ## Features
 
@@ -30,7 +30,8 @@ No subscription, no telemetry, no Electron — just a 1 MB native `.app` (766 KB
 ### 🎥 Video Recording
 - **Full-screen** or **region** recording, 30 fps HEVC (H.265) MP4 at a 1080p ceiling
 - Records **system audio** *and* **microphone** — ideal for capturing meetings
-- **Echo cancellation + audio mixdown** run automatically after every recording — the two tracks become one sharing-friendly AAC track, with the speaker echo removed from your mic
+- **WebRTC AEC3 echo cancellation + audio mixdown** run after every speaker-mode recording
+- The control bar has a manual **Speaker / Headphones** mode: speaker mode removes room echo, while headphones mode preserves the untouched microphone signal
 - **Convert MP4 → GIF** (12 fps, optimized) in one click
 - Floating control bar with REC indicator, live timer, stop and cancel buttons
 - Crash recovery: recordings use fragmented MP4 and are offered for recovery on the next launch after a crash or force quit
@@ -109,13 +110,13 @@ To regenerate the app icon from the source script:
 | Screenshot | ScreenCaptureKit (`SCScreenshotManager`) |
 | Video | ScreenCaptureKit (`SCStream`) + AVAssetWriter |
 | Audio | System audio via SCStream, microphone via AVCaptureSession + AVAudioEngine |
-| Echo cancellation | Time-domain NLMS adaptive filter with Geigel double-talk detection (Accelerate) |
+| Echo cancellation | WebRTC AEC3 with timestamp-aligned system and microphone tracks |
 | Audio mixing | AVAssetReader / AVAssetWriter (passthrough video, PCM sum + AAC re-encode) |
 | GIF | ImageIO + AVAssetImageGenerator |
 | Global hotkeys | Carbon Event Manager |
 | Build | Swift Package Manager + custom `build.sh` / `release.sh` |
 
-**Zero third-party dependencies.** Everything runs on first-party Apple frameworks.
+Sparkle provides updates, and the vendored BSD-licensed WebRTC AEC3 module provides acoustic echo cancellation.
 
 ## File Size Estimates
 

@@ -266,6 +266,9 @@ final class CaptureCoordinator {
         bar.onMicrophoneChange = { [weak self] enabled in
             self?.recorder.setMicrophoneEnabled(enabled)
         }
+        bar.onAudioModeChange = { [weak self] mode in
+            self?.recorder.setAudioMode(mode)
+        }
         self.recordingControlBar = bar
         bar.present()
     }
@@ -288,7 +291,7 @@ final class CaptureCoordinator {
         // (HandBrake, Slack uploads, browsers, etc.) get a single-track MP4
         // and don't drop the microphone audio.
         if micSamples > 0 {
-            await autoMixAudioTracks(inPlaceAt: url)
+            await autoMixAudioTracks(inPlaceAt: url, audioMode: recorder.audioMode)
         }
 
         let poster = await VideoPoster.firstFrame(of: url) ?? NSImage(systemSymbolName: "video.fill", accessibilityDescription: nil) ?? NSImage()
@@ -296,18 +299,23 @@ final class CaptureCoordinator {
         QuickAccessOverlayController.show(media: .video(state))
     }
 
-    private func autoMixAudioTracks(inPlaceAt url: URL) async {
+    private func autoMixAudioTracks(inPlaceAt url: URL, audioMode: RecordingAudioMode) async {
         let mixedURL = url.deletingPathExtension().appendingPathExtension("mixed.mp4")
-        ProcessingHUD.shared.show(message: "Removing echo + mixing audio…")
+        let echoCancellationEnabled = audioMode == .speakers
+        ProcessingHUD.shared.show(message: echoCancellationEnabled ? "Removing echo + mixing audio…" : "Mixing audio…")
         defer { ProcessingHUD.shared.hide() }
 
         // First try echo cancellation + mix. If anything goes wrong, fall back
         // to the plain track sum so the user still gets a single-track file.
         do {
-            try await EchoCancellingMixer.process(inputURL: url, outputURL: mixedURL)
+            try await EchoCancellingMixer.process(
+                inputURL: url,
+                outputURL: mixedURL,
+                echoCancellationEnabled: echoCancellationEnabled
+            )
             try? FileManager.default.removeItem(at: url)
             try FileManager.default.moveItem(at: mixedURL, to: url)
-            KlikLog("Klik: echo-cancelled + mixed audio into single track at \(url.path)")
+            KlikLog("Klik: aligned + mixed audio (AEC3=\(echoCancellationEnabled)) into single track at \(url.path)")
             return
         } catch {
             try? FileManager.default.removeItem(at: mixedURL)
