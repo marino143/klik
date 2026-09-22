@@ -5,6 +5,12 @@ import UniformTypeIdentifiers
 final class Storage {
     static let shared = Storage()
 
+    private let saveDirectoryPathKey = "Klik.saveDirectory"
+    #if APP_STORE
+    private let saveDirectoryBookmarkKey = "Klik.saveDirectoryBookmark"
+    private var activeSecurityScopedURL: URL?
+    #endif
+
     private let formatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH.mm.ss.SSS"
@@ -15,19 +21,69 @@ final class Storage {
 
     var saveDirectory: URL {
         get {
-            if let path = UserDefaults.standard.string(forKey: "Klik.saveDirectory") {
+            #if APP_STORE
+            if let url = resolveBookmarkedSaveDirectory() {
+                return url
+            }
+            #else
+            if let path = UserDefaults.standard.string(forKey: saveDirectoryPathKey) {
                 return URL(fileURLWithPath: path)
             }
+            #endif
             return defaultSaveDirectory
         }
         set {
-            UserDefaults.standard.set(newValue.path, forKey: "Klik.saveDirectory")
+            UserDefaults.standard.set(newValue.path, forKey: saveDirectoryPathKey)
+            #if APP_STORE
+            do {
+                let bookmark = try newValue.bookmarkData(
+                    options: [.withSecurityScope],
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+                UserDefaults.standard.set(bookmark, forKey: saveDirectoryBookmarkKey)
+                activateSecurityScope(for: newValue)
+            } catch {
+                KlikLog("Klik: failed to store save-folder permission — \(error.localizedDescription)")
+            }
+            #endif
         }
     }
 
+    var needsSaveDirectorySelection: Bool {
+        #if APP_STORE
+        return UserDefaults.standard.data(forKey: saveDirectoryBookmarkKey) == nil
+        #else
+        return false
+        #endif
+    }
+
     var defaultSaveDirectory: URL {
+        #if APP_STORE
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("Klik/Captures", isDirectory: true)
+        #else
         FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser
+        #endif
+    }
+
+    @discardableResult
+    func chooseSaveDirectory() -> Bool {
+        let panel = NSOpenPanel()
+        panel.title = "Choose a folder for Klik captures"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        if !needsSaveDirectorySelection {
+            panel.directoryURL = saveDirectory
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        saveDirectory = url
+        return true
     }
 
     var copyToClipboardOnCapture: Bool {
@@ -179,4 +235,41 @@ final class Storage {
         }
         return candidate
     }
+
+    #if APP_STORE
+    private func resolveBookmarkedSaveDirectory() -> URL? {
+        guard let data = UserDefaults.standard.data(forKey: saveDirectoryBookmarkKey) else { return nil }
+        var isStale = false
+        do {
+            let url = try URL(
+                resolvingBookmarkData: data,
+                options: [.withSecurityScope],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+            activateSecurityScope(for: url)
+            if isStale {
+                let refreshed = try url.bookmarkData(
+                    options: [.withSecurityScope],
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+                UserDefaults.standard.set(refreshed, forKey: saveDirectoryBookmarkKey)
+            }
+            return url
+        } catch {
+            UserDefaults.standard.removeObject(forKey: saveDirectoryBookmarkKey)
+            KlikLog("Klik: save-folder permission expired — \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func activateSecurityScope(for url: URL) {
+        if activeSecurityScopedURL?.standardizedFileURL == url.standardizedFileURL { return }
+        if let activeSecurityScopedURL {
+            activeSecurityScopedURL.stopAccessingSecurityScopedResource()
+        }
+        activeSecurityScopedURL = url.startAccessingSecurityScopedResource() ? url : nil
+    }
+    #endif
 }

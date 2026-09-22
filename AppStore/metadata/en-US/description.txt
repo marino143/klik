@@ -1,0 +1,29 @@
+Klik is a fast, native screen capture and recording tool for Apple silicon Macs.
+
+CAPTURE WHAT MATTERS
+Grab a region, window or full screen with a global keyboard shortcut. Klik stays in your menu bar and out of the capture.
+
+MAKE THE POINT
+Open any screenshot in the built-in editor. Add rectangles, arrows, text and highlights, blur sensitive details, crop the excess or pin the image above your other windows.
+
+DRAG AND KEEP MOVING
+Recent captures appear in a compact corner overlay. Drag them straight into Mail, Slack, Finder or any browser upload without hunting through folders.
+
+RECORD BOTH SIDES OF A MEETING
+Record the screen, system audio and your microphone. Speaker mode uses local WebRTC AEC3 processing to remove delayed speaker sound from the microphone track while preserving your voice. Switch manually to Headphones mode when you want the untouched microphone signal.
+
+SHARE-READY OUTPUT
+Klik records efficient HEVC video with predictable file sizes and mixes audio into one AAC track. Convert short recordings to an optimized GIF in one click.
+
+PRIVATE BY DESIGN
+No account. No telemetry. No automatic uploads. Captures and recordings stay on your Mac, and Klik only accesses the save folder you choose.
+
+DETAILS THAT MATTER
+• Native Swift app — no Electron
+• Region, window and full-screen screenshots
+• Full-screen and region video recording
+• Annotation, blur, crop and pin tools
+• Automatic recording recovery after a crash
+• Signed App Store updates
+• macOS 14 or newer
+• Apple silicon required

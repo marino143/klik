@@ -1,0 +1,1 @@
+Capture a region, window or full screen, mark up the result and drag it straight into the app where you need it.

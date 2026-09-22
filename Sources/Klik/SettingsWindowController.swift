@@ -104,14 +104,8 @@ final class SettingsWindowController: NSWindowController {
     }
 
     @objc private func chooseFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        if panel.runModal() == .OK, let url = panel.url {
-            Storage.shared.saveDirectory = url
-            folderLabel.stringValue = url.path
+        if Storage.shared.chooseSaveDirectory() {
+            folderLabel.stringValue = Storage.shared.saveDirectory.path
         }
     }
 

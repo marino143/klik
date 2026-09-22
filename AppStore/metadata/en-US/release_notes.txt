@@ -1,0 +1,8 @@
+Initial Mac App Store release.
+
+• Screenshot capture and annotation
+• Screen recording with system audio and microphone
+• WebRTC AEC3 echo cancellation
+• Manual Speaker and Headphones modes
+• MP4 to GIF conversion
+• Quick drag-out overlay

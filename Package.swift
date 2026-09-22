@@ -1,12 +1,19 @@
 // swift-tools-version: 5.10
+import Foundation
 import PackageDescription
+
+let isAppStoreBuild = ProcessInfo.processInfo.environment["KLIK_APP_STORE"] == "1"
+let packageDependencies: [Package.Dependency] = isAppStoreBuild
+    ? []
+    : [.package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")]
+let klikDependencies: [Target.Dependency] = isAppStoreBuild
+    ? [.target(name: "CWebRTCAEC3")]
+    : [.product(name: "Sparkle", package: "Sparkle"), .target(name: "CWebRTCAEC3")]
 
 let package = Package(
     name: "Klik",
     platforms: [.macOS(.v14)],
-    dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")
-    ],
+    dependencies: packageDependencies,
     targets: [
         .target(
             name: "CWebRTCAEC3",
@@ -51,8 +58,9 @@ let package = Package(
         ),
         .executableTarget(
             name: "Klik",
-            dependencies: ["Sparkle", "CWebRTCAEC3"],
-            path: "Sources/Klik"
+            dependencies: klikDependencies,
+            path: "Sources/Klik",
+            swiftSettings: isAppStoreBuild ? [.define("APP_STORE")] : []
         ),
         .testTarget(
             name: "CWebRTCAEC3Tests",

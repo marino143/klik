@@ -1,0 +1,10 @@
+Klik is a menu bar screen-capture utility. After launch, use the camera-viewfinder icon in the menu bar or these global shortcuts:
+
+Shift-Command-2: capture region
+Shift-Command-3: capture full screen
+Shift-Command-4: capture window
+Shift-Command-5: record full screen
+
+macOS asks for Screen Recording permission on the first capture and Microphone permission on the first recording. If Screen Recording permission is granted while Klik is running, quit and reopen the app before testing capture.
+
+Speaker mode uses local WebRTC AEC3 processing to remove room echo. Headphones mode bypasses echo cancellation. Captures and recordings remain local and are never uploaded by the app.

@@ -1,6 +1,8 @@
 import AppKit
 import Carbon.HIToolbox
+#if !APP_STORE
 import Sparkle
+#endif
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,11 +10,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var hotkeyManager: HotkeyManager!
     private var captureCoordinator: CaptureCoordinator!
+    #if !APP_STORE
     private let updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: nil,
         userDriverDelegate: nil
     )
+    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         DiagnosticsLogger.shared.start()
@@ -21,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         captureCoordinator.restoreInterruptedRecordings()
         hotkeyManager = HotkeyManager()
         registerHotkeys()
+        #if APP_STORE
+        offerSaveFolderAccessIfNeeded()
+        #endif
     }
 
     private func setupStatusItem() {
@@ -42,9 +49,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(regionItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(makeMenuItem("Settings…", key: ",", action: #selector(openSettings)))
+        #if !APP_STORE
         let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
         updateItem.target = self
         menu.addItem(updateItem)
+        #endif
+        #if !APP_STORE
         let diagnosticsItem = NSMenuItem(title: "Export Diagnostics…", action: #selector(exportDiagnostics), keyEquivalent: "")
         diagnosticsItem.target = self
         menu.addItem(diagnosticsItem)
@@ -52,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let coffeeItem = NSMenuItem(title: "Buy me a coffee ☕", action: #selector(openBuyMeACoffee), keyEquivalent: "")
         coffeeItem.target = self
         menu.addItem(coffeeItem)
+        #endif
         menu.addItem(NSMenuItem.separator())
         menu.addItem(makeMenuItem("Quit Klik", key: "q", action: #selector(quit)))
         statusItem.menu = menu
@@ -103,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SettingsWindowController.shared.show()
     }
 
+    #if !APP_STORE
     @objc private func checkForUpdates() {
         updaterController.checkForUpdates(nil)
     }
@@ -116,6 +128,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSWorkspace.shared.open(url)
         }
     }
+    #endif
+
+    #if APP_STORE
+    private func offerSaveFolderAccessIfNeeded() {
+        guard Storage.shared.needsSaveDirectorySelection,
+              !UserDefaults.standard.bool(forKey: "Klik.didOfferSaveDirectory") else { return }
+        UserDefaults.standard.set(true, forKey: "Klik.didOfferSaveDirectory")
+
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Choose where Klik saves captures"
+            alert.informativeText = "The Mac App Store version can only save outside its private container after you choose a folder. You can change it later in Settings."
+            alert.addButton(withTitle: "Choose Folder")
+            alert.addButton(withTitle: "Not Now")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            _ = Storage.shared.chooseSaveDirectory()
+        }
+    }
+    #endif
 
     @objc private func quit() {
         NSApp.terminate(nil)

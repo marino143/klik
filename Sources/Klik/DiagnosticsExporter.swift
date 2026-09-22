@@ -1,3 +1,4 @@
+#if !APP_STORE
 import AppKit
 
 @MainActor
@@ -115,3 +116,4 @@ enum DiagnosticsExporter {
         return formatter.string(from: Date())
     }
 }
+#endif
