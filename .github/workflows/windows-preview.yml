@@ -37,6 +37,10 @@ jobs:
           dotnet build .\Klik.Windows.sln -c Release --no-restore -p:Platform=x64
           dotnet test .\Klik.Windows.Tests\Klik.Windows.Tests.csproj -c Release
 
+      - name: Install FFmpeg
+        shell: pwsh
+        run: choco install ffmpeg -y --no-progress
+
       - name: Publish app
         shell: pwsh
         working-directory: windows
