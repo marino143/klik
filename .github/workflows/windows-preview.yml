@@ -66,8 +66,9 @@ jobs:
           foreach ($file in $required) {
             if (-not (Test-Path (Join-Path $publish $file))) { throw "Missing $file" }
           }
-          & (Join-Path $publish "tools\ffmpeg.exe") -version | Select-Object -First 1
+          $ffmpegVersion = & (Join-Path $publish "tools\ffmpeg.exe") -version 2>&1
           if ($LASTEXITCODE -ne 0) { throw "Packaged FFmpeg failed to start" }
+          $ffmpegVersion | Select-Object -First 1
 
       - uses: actions/upload-artifact@v4
         with:
