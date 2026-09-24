@@ -15,6 +15,9 @@ DerivedData/
 # Build output
 build/
 build-appstore/
+windows/**/bin/
+windows/**/obj/
+windows/artifacts/
 
 # Logs
 *.log

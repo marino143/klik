@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Klik.Windows", "Klik.Windows\Klik.Windows.csproj", "{1D74A0A6-7F73-4C51-A1BB-4DE44F54D131}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Klik.Windows.Tests", "Klik.Windows.Tests\Klik.Windows.Tests.csproj", "{8FE36CE2-36A3-4EAE-AB5B-B0A83968B4AD}"
+EndProject
+Global
+  GlobalSection(SolutionConfigurationPlatforms) = preSolution
+    Debug|x64 = Debug|x64
+    Release|x64 = Release|x64
+  EndGlobalSection
+  GlobalSection(ProjectConfigurationPlatforms) = postSolution
+    {1D74A0A6-7F73-4C51-A1BB-4DE44F54D131}.Debug|x64.ActiveCfg = Debug|x64
+    {1D74A0A6-7F73-4C51-A1BB-4DE44F54D131}.Debug|x64.Build.0 = Debug|x64
+    {1D74A0A6-7F73-4C51-A1BB-4DE44F54D131}.Release|x64.ActiveCfg = Release|x64
+    {1D74A0A6-7F73-4C51-A1BB-4DE44F54D131}.Release|x64.Build.0 = Release|x64
+    {8FE36CE2-36A3-4EAE-AB5B-B0A83968B4AD}.Debug|x64.ActiveCfg = Debug|x64
+    {8FE36CE2-36A3-4EAE-AB5B-B0A83968B4AD}.Debug|x64.Build.0 = Debug|x64
+    {8FE36CE2-36A3-4EAE-AB5B-B0A83968B4AD}.Release|x64.ActiveCfg = Release|x64
+    {8FE36CE2-36A3-4EAE-AB5B-B0A83968B4AD}.Release|x64.Build.0 = Release|x64
+  EndGlobalSection
+EndGlobal
