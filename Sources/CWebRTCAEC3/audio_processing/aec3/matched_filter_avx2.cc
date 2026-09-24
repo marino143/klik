@@ -82,14 +82,18 @@ void MatchedFilterCore_AccumulatedError_AVX2(size_t x_start_index,
       s_inst_256_8 = _mm256_mul_ps(h_k_8, x_k_8);
       s_inst_hadd_256 = _mm256_hadd_ps(s_inst_256, s_inst_256_8);
       s_inst_hadd_256 = _mm256_hadd_ps(s_inst_hadd_256, s_inst_hadd_256);
-      s_acum += s_inst_hadd_256[0];
-      e_128[0] = s_acum - y[i];
-      s_acum += s_inst_hadd_256[4];
-      e_128[1] = s_acum - y[i];
-      s_acum += s_inst_hadd_256[1];
-      e_128[2] = s_acum - y[i];
-      s_acum += s_inst_hadd_256[5];
-      e_128[3] = s_acum - y[i];
+      alignas(32) float partial_sums[8];
+      alignas(16) float errors[4];
+      _mm256_store_ps(partial_sums, s_inst_hadd_256);
+      s_acum += partial_sums[0];
+      errors[0] = s_acum - y[i];
+      s_acum += partial_sums[4];
+      errors[1] = s_acum - y[i];
+      s_acum += partial_sums[1];
+      errors[2] = s_acum - y[i];
+      s_acum += partial_sums[5];
+      errors[3] = s_acum - y[i];
+      e_128 = _mm_load_ps(errors);
 
       __m128 acum_error = _mm_loadu_ps(a_p);
       acum_error = _mm_fmadd_ps(e_128, e_128, acum_error);
@@ -210,8 +214,10 @@ void MatchedFilterCore_AVX2(size_t x_start_index,
     x2_sum_256 = _mm256_add_ps(x2_sum_256, x2_sum_256_8);
     s_256 = _mm256_add_ps(s_256, s_256_8);
     __m128 sum = hsum_ab(x2_sum_256, s_256);
-    x2_sum += sum[0];
-    s += sum[1];
+    alignas(16) float sums[4];
+    _mm_store_ps(sums, sum);
+    x2_sum += sums[0];
+    s += sums[1];
 
     // Compute the matched filter error.
     float e = y[i] - s;
