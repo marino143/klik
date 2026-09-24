@@ -10,5 +10,6 @@
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.0.0" />
     <Compile Include="..\Klik.Windows\Models\CaptureTarget.cs" Link="Models\CaptureTarget.cs" />
+    <Compile Include="..\Klik.Windows\Services\PcmWaveWriter.cs" Link="Services\PcmWaveWriter.cs" />
   </ItemGroup>
 </Project>

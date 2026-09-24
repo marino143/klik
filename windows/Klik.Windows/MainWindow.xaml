@@ -70,7 +70,7 @@
                   Background="#171717" Foreground="White" BorderBrush="#171717" />
           <Button x:Name="HeadphonesButton" Grid.Column="1" Content="Headphones" Margin="5,0,0,0" Click="Headphones_Click" />
         </Grid>
-        <TextBlock x:Name="AudioModeHelp" Text="For recordings played through speakers."
+        <TextBlock x:Name="AudioModeHelp" Text="AEC3 removes speaker playback from the microphone."
                    Margin="0,8,0,0" Foreground="{StaticResource MutedBrush}" FontSize="12" />
       </StackPanel>
 

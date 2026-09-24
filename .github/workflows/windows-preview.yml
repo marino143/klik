@@ -1,0 +1,69 @@
+name: Windows preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "windows/**"
+      - "Sources/CWebRTCAEC3/**"
+      - ".github/workflows/windows-preview.yml"
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build AEC3
+        shell: pwsh
+        run: |
+          cmake -S windows/native/KlikAec3 -B windows/native/KlikAec3/build -A x64
+          cmake --build windows/native/KlikAec3/build --config Release --parallel
+          ctest --test-dir windows/native/KlikAec3/build -C Release --output-on-failure
+
+      - name: Build and test app
+        shell: pwsh
+        working-directory: windows
+        run: |
+          dotnet restore .\Klik.Windows.sln
+          dotnet build .\Klik.Windows.sln -c Release --no-restore -p:Platform=x64
+          dotnet test .\Klik.Windows.Tests\Klik.Windows.Tests.csproj -c Release
+
+      - name: Publish app
+        shell: pwsh
+        working-directory: windows
+        run: |
+          $publish = Join-Path $PWD "artifacts\Klik-Windows-Speakers-preview"
+          dotnet publish .\Klik.Windows\Klik.Windows.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishSingleFile=false -o $publish
+          Copy-Item .\native\KlikAec3\build\bin\Release\KlikAec3.dll $publish
+          New-Item -ItemType Directory -Force (Join-Path $publish "tools") | Out-Null
+          $ffmpeg = (Get-Command ffmpeg.exe -ErrorAction Stop).Source
+          Copy-Item $ffmpeg (Join-Path $publish "tools\ffmpeg.exe")
+          & $ffmpeg -L 2>&1 | Out-File -Encoding utf8 (Join-Path $publish "FFmpeg-LICENSE.txt")
+          Copy-Item .\THIRD-PARTY-NOTICES.md $publish
+          Copy-Item .\README.md (Join-Path $publish "README-Windows.md")
+
+      - name: Smoke-check package
+        shell: pwsh
+        working-directory: windows
+        run: |
+          $publish = Join-Path $PWD "artifacts\Klik-Windows-Speakers-preview"
+          $required = @("Klik.exe", "KlikAec3.dll", "tools\ffmpeg.exe")
+          foreach ($file in $required) {
+            if (-not (Test-Path (Join-Path $publish $file))) { throw "Missing $file" }
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Klik-Windows-Speakers-preview
+          path: windows/artifacts/Klik-Windows-Speakers-preview
+          if-no-files-found: error
+          retention-days: 14

@@ -18,6 +18,7 @@ build-appstore/
 windows/**/bin/
 windows/**/obj/
 windows/artifacts/
+windows/native/**/build/
 
 # Logs
 *.log

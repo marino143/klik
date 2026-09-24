@@ -1,4 +1,5 @@
 using System.Windows;
+using Klik.Windows.Services;
 
 namespace Klik.Windows;
 
@@ -6,6 +7,7 @@ public partial class App : System.Windows.Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
+        RecorderService.CleanupAbandonedSessions();
         base.OnStartup(e);
         DispatcherUnhandledException += (_, args) =>
         {

@@ -9,11 +9,12 @@ Windows 10 port of Klik. This is a native WPF application, not an Electron wrapp
 - Windows Graphics Capture / DXGI capture through ScreenRecorderLib
 - System audio through WASAPI loopback
 - Optional default microphone capture
+- WebRTC AEC3 speaker-mode processing with timestamp-aligned loopback and microphone PCM
 - Pause, resume, stop, and discard
 - Global shortcuts: `Win+Shift+2`, `Win+Shift+3`, `Win+Shift+4`, `Win+Shift+5`
 - Configurable output folder
 
-The Windows capture pipeline builds and packages successfully, but it still needs a real Windows 10 runtime pass before public distribution. Speaker mode currently uses the same Windows audio inputs with a slightly lower microphone gain. The macOS WebRTC AEC3 post-processing pipeline has not yet been connected to the Windows encoder, so speaker recordings can still contain room echo. Headphones mode is the safe preview mode.
+The Windows capture pipeline builds and packages successfully, but it still needs a real Windows 10 runtime pass before public distribution. Speaker mode captures loopback and microphone packets separately, runs the microphone through WebRTC AEC3 in timestamp-aligned 10 ms frames, mixes the cleaned microphone with loopback audio, and remuxes that audio with the original H.264 video without re-encoding the video. Headphones mode bypasses AEC3.
 
 ## Requirements
 
@@ -22,7 +23,7 @@ The Windows capture pipeline builds and packages successfully, but it still need
 - Media Foundation (included with standard Windows editions)
 - Media Feature Pack on Windows N/KN
 
-The self-contained package includes the .NET 8 Desktop runtime. Screen recording uses the MIT-licensed [ScreenRecorderLib](https://github.com/sskodje/ScreenRecorderLib).
+The self-contained package includes the .NET 8 Desktop runtime. Screen recording uses the MIT-licensed [ScreenRecorderLib](https://github.com/sskodje/ScreenRecorderLib). The packaged FFmpeg executable is used only to encode AAC and remux the cleaned audio track.
 
 ## Build
 
@@ -54,7 +55,7 @@ Do not publish this preview until it has been exercised on Windows 10 with:
 1. A display, region, and window recording
 2. System audio only
 3. System audio plus microphone with headphones
-4. Speaker playback after the AEC3 path is connected
+4. Speaker playback with AEC3 enabled, including double-talk where both people speak
 5. Pause/resume and discard
 6. 100%, 125%, and 150% display scaling
 7. Windows N with Media Feature Pack, or a documented unsupported-state message

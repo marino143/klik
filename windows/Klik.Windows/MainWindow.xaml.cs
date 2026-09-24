@@ -119,6 +119,10 @@ public partial class MainWindow : Window
                 OpenFolder(result);
             }
         }
+        catch (OperationCanceledException) when (_cancelRequested)
+        {
+            ResetAfterRecording();
+        }
         catch (Exception exception)
         {
             ResetAfterRecording();
@@ -181,7 +185,7 @@ public partial class MainWindow : Window
         SpeakersButton.Foreground = System.Windows.Media.Brushes.White;
         HeadphonesButton.Background = (System.Windows.Media.Brush)FindResource("LineBrush");
         HeadphonesButton.Foreground = (System.Windows.Media.Brush)FindResource("InkBrush");
-        AudioModeHelp.Text = "For recordings played through speakers.";
+        AudioModeHelp.Text = "AEC3 removes speaker playback from the microphone.";
     }
 
     private void Headphones_Click(object sender, RoutedEventArgs e)

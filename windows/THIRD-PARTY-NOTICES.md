@@ -23,3 +23,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## FFmpeg
+
+The Windows package includes a separate FFmpeg executable used to encode AAC
+and remux the AEC3-cleaned audio track with Klik's H.264 video. The exact FFmpeg
+license and configuration are included in the package as `FFmpeg-LICENSE.txt`.
+FFmpeg source and license information: https://ffmpeg.org/legal.html
