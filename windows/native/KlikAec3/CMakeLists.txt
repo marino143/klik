@@ -9,11 +9,14 @@ set(AEC3_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../Sources/CWebRTCAEC3")
 file(GLOB_RECURSE AEC3_SOURCES CONFIGURE_DEPENDS
     "${AEC3_ROOT}/*.cc"
     "${AEC3_ROOT}/*.cpp")
+list(APPEND AEC3_SOURCES
+    "${AEC3_ROOT}/audio_processing/splitting_filter_c.c")
 
-list(FILTER AEC3_SOURCES EXCLUDE REGEX ".*_avx2\\.cc$")
 list(FILTER AEC3_SOURCES EXCLUDE REGEX ".*_neon\\.cc$")
 list(FILTER AEC3_SOURCES EXCLUDE REGEX ".*_mips\\.cc$")
-list(FILTER AEC3_SOURCES EXCLUDE REGEX ".*_sse2?\\.cc$")
+
+file(GLOB_RECURSE AEC3_AVX2_SOURCES CONFIGURE_DEPENDS
+    "${AEC3_ROOT}/*_avx2.cc")
 
 add_library(KlikAec3 SHARED ${AEC3_SOURCES})
 set_target_properties(KlikAec3 PROPERTIES
@@ -44,8 +47,12 @@ target_compile_definitions(KlikAec3 PRIVATE
     WIN32_LEAN_AND_MEAN
     _CRT_SECURE_NO_WARNINGS)
 
+target_link_libraries(KlikAec3 PRIVATE winmm)
+
 if(MSVC)
     target_compile_options(KlikAec3 PRIVATE /EHsc /W3 /wd4244 /wd4267 /wd4996)
+    set_source_files_properties(${AEC3_AVX2_SOURCES} PROPERTIES
+        COMPILE_OPTIONS "/arch:AVX2")
 endif()
 
 add_executable(KlikAec3SyntheticTest synthetic_test.cpp)
