@@ -12,6 +12,7 @@
 
 #include <string.h>
 
+#include <array>
 #include <cstdint>
 
 #include "audio_processing/channel_buffer.h"
