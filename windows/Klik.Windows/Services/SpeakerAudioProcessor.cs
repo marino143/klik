@@ -157,7 +157,7 @@ internal static class SpeakerAudioProcessor
     {
         var bundled = Path.Combine(AppContext.BaseDirectory, "tools", "ffmpeg.exe");
         if (File.Exists(bundled)) return bundled;
-        return OperatingSystem.IsWindows() ? "ffmpeg.exe" : null;
+        return null;
     }
 
     private static string SafeError(string error)
