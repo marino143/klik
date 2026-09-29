@@ -9,9 +9,9 @@
     <key>CFBundleExecutable</key>
     <string>Klik</string>
     <key>CFBundleIconFile</key>
-    <string>Klik</string>
+    <string>AppIcon</string>
     <key>CFBundleIconName</key>
-    <string>Klik</string>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>hr.codigit.klik</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -23,7 +23,7 @@
     <key>CFBundleShortVersionString</key>
     <string>1.0.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     <key>LSMinimumSystemVersion</key>

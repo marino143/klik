@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 022
 
 APP_NAME="Klik"
 BUNDLE_ID="hr.codigit.klik"
@@ -31,8 +32,16 @@ rm -rf "${APP_BUNDLE}"
 mkdir -p "${MACOS_DIR}" "${RES_DIR}"
 cp "${BIN_PATH}" "${MACOS_DIR}/${APP_NAME}"
 cp "${ROOT}/Resources/Info-AppStore.plist" "${CONTENTS}/Info.plist"
-cp "${ROOT}/Resources/Klik.icns" "${RES_DIR}/Klik.icns"
 cp "${ROOT}/Sources/CWebRTCAEC3/LICENSE.webrtc-aec3" "${RES_DIR}/WebRTC-AEC3-LICENSE.txt"
+
+echo "→ Compiling App Store asset catalog…"
+xcrun actool "${ROOT}/Resources/Assets.xcassets" \
+    --compile "${RES_DIR}" \
+    --platform macosx \
+    --minimum-deployment-target 14.0 \
+    --app-icon AppIcon \
+    --output-partial-info-plist "${BUILD_ROOT}/asset-catalog-info.plist" \
+    --warnings --notices
 
 if [[ -n "${PROFILE_PATH}" ]]; then
     if [[ ! -f "${PROFILE_PATH}" ]]; then
@@ -42,6 +51,13 @@ if [[ -n "${PROFILE_PATH}" ]]; then
     cp "${PROFILE_PATH}" "${CONTENTS}/embedded.provisionprofile"
     ENTITLEMENTS_PATH="${ROOT}/Resources/Klik-AppStore-Distribution.entitlements"
 fi
+
+# App Store packages must be readable by the installing user. The agent
+# workspace may run with a restrictive umask, so normalize the bundle before
+# signing and packaging it.
+find "${APP_BUNDLE}" -type d -exec chmod 755 {} +
+find "${APP_BUNDLE}" -type f -exec chmod 644 {} +
+chmod 755 "${MACOS_DIR}/${APP_NAME}"
 
 echo "→ Signing with ${SIGN_IDENTITY}…"
 codesign --force --timestamp --options runtime \
@@ -66,7 +82,9 @@ echo "   Sandbox: enabled"
 
 if [[ -n "${KLIK_INSTALLER_IDENTITY:-}" ]]; then
     PKG_PATH="${BUILD_ROOT}/${APP_NAME}-1.0.0.pkg"
-    productbuild --component "${APP_BUNDLE}" /Applications \
-        --sign "${KLIK_INSTALLER_IDENTITY}" "${PKG_PATH}"
+    UNSIGNED_PKG_PATH="${BUILD_ROOT}/${APP_NAME}-1.0.0.unsigned.pkg"
+    rm -f "${PKG_PATH}" "${UNSIGNED_PKG_PATH}"
+    productbuild --component "${APP_BUNDLE}" /Applications "${UNSIGNED_PKG_PATH}"
+    productsign --sign "${KLIK_INSTALLER_IDENTITY}" "${UNSIGNED_PKG_PATH}" "${PKG_PATH}"
     echo "✅ Upload package: ${PKG_PATH}"
 fi
