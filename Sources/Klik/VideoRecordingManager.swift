@@ -95,15 +95,11 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         let nativeWidth = max(2, Int(region.width * scale))
         let nativeHeight = max(2, Int(region.height * scale))
 
-        // Cap output at 1080p height. Combined with the HEVC encoder below
-        // this aims for HandBrake "Fast 1080p30"-class file sizes out of the
-        // box, so the user doesn't have to re-encode meeting recordings.
-        let maxOutputHeight = 1080
-        let scaleFactor: Double = nativeHeight > maxOutputHeight
-            ? Double(maxOutputHeight) / Double(nativeHeight)
-            : 1.0
-        let pixelWidth = max(2, Int(Double(nativeWidth) * scaleFactor) & ~1)   // even
-        let pixelHeight = max(2, Int(Double(nativeHeight) * scaleFactor) & ~1) // even
+        // Snapshot preferences once; changes apply to the next recording.
+        let preferences = RecordingSettings()
+        let dimensions = preferences.dimensions(width: nativeWidth, height: nativeHeight)
+        let pixelWidth = dimensions.width
+        let pixelHeight = dimensions.height
         KlikLog("Klik: startRecording region=\(region) scale=\(scale) native=\(nativeWidth)x\(nativeHeight) output=\(pixelWidth)x\(pixelHeight)")
 
         let fileURL = Storage.shared.makeTempVideoURL()
@@ -123,11 +119,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         writer.movieFragmentInterval = CMTime(seconds: 1, preferredTimescale: 600)
         writer.shouldOptimizeForNetworkUse = true
 
-        // HEVC + ~1.5 bits/pixel + 6 Mbps cap. Screen content compresses
-        // exceptionally well with HEVC; this matches HandBrake Fast 1080p30
-        // size-wise without requiring a second compression pass.
-        let computedBitrate = Int(Double(pixelWidth * pixelHeight) * 1.5)
-        let bitrate = min(computedBitrate, 6_000_000)
+        let bitrate = preferences.bitrate(width: pixelWidth, height: pixelHeight)
         KlikLog("Klik: video bitrate = \(bitrate) bps (~\(bitrate / 1_000_000) Mbps), codec=HEVC")
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.hevc,
@@ -135,8 +127,8 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             AVVideoHeightKey: pixelHeight,
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: bitrate,
-                AVVideoMaxKeyFrameIntervalKey: 60,
-                AVVideoExpectedSourceFrameRateKey: 30,
+                AVVideoMaxKeyFrameIntervalKey: preferences.fps * 2,
+                AVVideoExpectedSourceFrameRateKey: preferences.fps,
             ] as [String: Any]
         ]
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
@@ -172,7 +164,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         let config = SCStreamConfiguration()
         config.width = pixelWidth
         config.height = pixelHeight
-        config.minimumFrameInterval = CMTime(value: 1, timescale: 30)
+        config.minimumFrameInterval = CMTime(value: 1, timescale: Int32(preferences.fps))
         config.queueDepth = 3
         config.showsCursor = true
         config.pixelFormat = kCVPixelFormatType_32BGRA
