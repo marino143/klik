@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-final class SettingsWindowController: NSWindowController {
+final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
     static let shared = SettingsWindowController()
 
     private var folderLabel: NSTextField!
@@ -10,10 +10,14 @@ final class SettingsWindowController: NSWindowController {
     private var resolutionPopup: NSPopUpButton!
     private var fpsPopup: NSPopUpButton!
     private var qualityPopup: NSPopUpButton!
+    private var stopCheckbox: NSButton!
+    private let stopMinutes = NSTextField(string: "10")
+    private let stopSeconds = NSTextField(string: "0")
+    private let stopFeedback = NSTextField(labelWithString: "")
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 540, height: 490),
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 610),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -51,6 +55,17 @@ final class SettingsWindowController: NSWindowController {
         fpsPopup = recordingPopup(label: "Frame rate", help: "60 fps targets smoother motion and uses more storage and processing power.")
         qualityPopup = recordingPopup(label: "Quality", help: "High preserves more detail; Smaller file uses a lower bitrate.")
 
+        stopCheckbox = NSButton(checkboxWithTitle: "Automatically stop recording", target: self, action: #selector(changeStopSettings))
+        for (field, label) in [(stopMinutes, "Automatic stop minutes"), (stopSeconds, "Automatic stop seconds")] {
+            field.delegate = self
+            field.setAccessibilityLabel(label)
+            field.widthAnchor.constraint(equalToConstant: 64).isActive = true
+        }
+        let durationRow = NSStackView(views: [stopMinutes, makeLabel("minutes", bold: false), stopSeconds, makeLabel("seconds", bold: false)])
+        durationRow.spacing = 8
+        stopFeedback.font = .systemFont(ofSize: 12)
+        stopFeedback.textColor = .labelColor
+
         let hotkeysTitle = makeLabel("Keyboard Shortcuts", bold: true)
         let hotkeysList = makeLabel("⇧⌘2 — Capture Region\n⇧⌘3 — Capture Full Screen\n⇧⌘4 — Capture Window\n⇧⌘5 — Record Video (Full Screen)", bold: false)
 
@@ -67,6 +82,11 @@ final class SettingsWindowController: NSWindowController {
             row(makeLabel("Quality", bold: false), qualityPopup),
             makeLabel("Previous settings: 1080p / 30 fps / Standard", bold: false),
             makeLabel("Saved automatically. Applies to the next recording.", bold: false),
+            stopCheckbox,
+            durationRow,
+            stopFeedback,
+            makeLabel("Counts elapsed recording time, including microphone mute.", bold: false),
+            makeLabel("No pause control. Stops and keeps the video for saving.", bold: false),
             spacer(),
             hotkeysTitle,
             hotkeysList,
@@ -89,6 +109,11 @@ final class SettingsWindowController: NSWindowController {
 
     private func refreshUI() {
         refreshRecordingUI()
+        let stop = RecordingStopSettings()
+        stopCheckbox.state = stop.enabled ? .on : .off
+        stopMinutes.stringValue = String(stop.seconds / 60)
+        stopSeconds.stringValue = String(stop.seconds % 60)
+        updateStopFields()
         folderLabel.stringValue = Storage.shared.saveDirectory.path
         copyCheckbox.state = Storage.shared.copyToClipboardOnCapture ? .on : .off
         autoSaveCheckbox.state = Storage.shared.autoSaveOnCapture ? .on : .off
@@ -128,6 +153,27 @@ final class SettingsWindowController: NSWindowController {
         settings.quality = RecordingSettings.Quality.allCases[qualityPopup.indexOfSelectedItem]
         settings.save()
         refreshRecordingUI()
+    }
+
+    func controlTextDidChange(_ obj: Notification) { changeStopSettings() }
+
+    @objc private func changeStopSettings() {
+        var settings = RecordingStopSettings()
+        let valid = RecordingStopSettings.duration(minutes: stopMinutes.stringValue, seconds: stopSeconds.stringValue)
+        settings.enabled = stopCheckbox.state == .on && valid != nil
+        if let valid { settings.seconds = valid }
+        settings.save()
+        updateStopFields()
+    }
+
+    private func updateStopFields() {
+        let enabled = stopCheckbox.state == .on
+        stopMinutes.isEnabled = enabled
+        stopSeconds.isEnabled = enabled
+        let valid = RecordingStopSettings.duration(minutes: stopMinutes.stringValue, seconds: stopSeconds.stringValue) != nil
+        stopFeedback.stringValue = enabled && !valid
+            ? "Enter 1 second to 1440 minutes. Seconds: 0–59. Timer is off."
+            : "Timer " + (enabled ? "saved for the next recording." : "off. Duration: 1 second to 1440 minutes.")
     }
 
     private func makeLabel(_ text: String, bold: Bool) -> NSTextField {

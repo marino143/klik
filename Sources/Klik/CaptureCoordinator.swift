@@ -8,8 +8,10 @@ final class CaptureCoordinator {
     private var regionSelector: RegionSelectorController?
     private var windowPicker: WindowPickerController?
     private var recordingControlBar: RecordingControlBar?
+    private var isStoppingRecording = false
 
     init() {
+        recorder.onAutomaticStop = { [weak self] in self?.stopVideoRecording() }
         recorder.onUnexpectedStop = { [weak self] error in
             guard let self else { return }
             self.dismissControlBar()
@@ -131,6 +133,7 @@ final class CaptureCoordinator {
     }
 
     func toggleVideoRecording() {
+        guard !isStoppingRecording else { return }
         if recorder.isRecording {
             stopVideoRecording()
         } else {
@@ -139,6 +142,7 @@ final class CaptureCoordinator {
     }
 
     func toggleRegionVideoRecording() {
+        guard !isStoppingRecording else { return }
         if recorder.isRecording {
             stopVideoRecording()
         } else {
@@ -248,7 +252,10 @@ final class CaptureCoordinator {
     }
 
     private func stopVideoRecording() {
+        guard recorder.isRecording, !isStoppingRecording else { return }
+        isStoppingRecording = true
         Task {
+            defer { isStoppingRecording = false }
             do {
                 let url = try await recorder.stopRecording()
                 dismissControlBar()
@@ -262,6 +269,7 @@ final class CaptureCoordinator {
 
     private func presentControlBar() {
         let bar = RecordingControlBar()
+        bar.remainingTime = { [weak self] in self?.recorder.automaticStopRemaining }
         bar.onStop = { [weak self] in self?.stopVideoRecording() }
         bar.onMicrophoneChange = { [weak self] enabled in
             self?.recorder.setMicrophoneEnabled(enabled)

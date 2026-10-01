@@ -45,6 +45,11 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private(set) var outputURL: URL?
     private(set) var startedAt: Date?
     var onUnexpectedStop: (@MainActor (Error) -> Void)?
+    var onAutomaticStop: (@MainActor () -> Void)?
+    @MainActor private let stopTimer = RecordingStopTimer()
+    @MainActor var automaticStopRemaining: TimeInterval? { stopTimer.remaining }
+    @MainActor private var isFinishing = false
+    @MainActor private var isStarting = false
 
     /// Number of microphone sample buffers appended to the writer during the
     /// most recent recording. Reset on each `startRecording` call.
@@ -86,11 +91,15 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         excluding windows: [SCWindow] = [],
         excludingApps: [SCRunningApplication] = []
     ) async throws -> URL {
-        guard !isRecording else {
+        guard !isRecording, !isStarting, !isFinishing else {
             KlikLog("Klik: startRecording called while already recording — ignoring")
             throw RecordingError.alreadyRecording
         }
 
+        isStarting = true
+        defer { isStarting = false }
+        stopTimer.cancel()
+        let stopDuration = RecordingStopSettings().duration
         let scale = screen.backingScaleFactor
         let nativeWidth = max(2, Int(region.width * scale))
         let nativeHeight = max(2, Int(region.height * scale))
@@ -221,6 +230,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             KlikLog("Klik: calling stream.startCapture()…")
             try await stream.startCapture()
             self.startedAt = Date()
+            stopTimer.start(duration: stopDuration) { [weak self] in
+                guard let self, self.isRecording, !self.isFinishing else { return }
+                self.onAutomaticStop?()
+            }
             KlikLog("Klik: stream.startCapture() OK — recording in progress")
         } catch let e as NSError {
             KlikLog("Klik: startCapture FAILED — domain=\(e.domain) code=\(e.code) desc=\(e.localizedDescription) info=\(e.userInfo)")
@@ -338,12 +351,16 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
 
     @MainActor
     func stopRecording() async throws -> URL {
-        guard let stream = stream, let writer = writer, let input = videoInput, let url = outputURL else {
+        guard !isStarting, !isFinishing, let stream = stream, let writer = writer, let input = videoInput, let url = outputURL else {
             throw RecordingError.notRecording
         }
 
+        isFinishing = true
+        stopTimer.cancel()
+        defer { isFinishing = false }
         stopMicrophoneCapture()
-        try await stream.stopCapture()
+        var stopError: Error?
+        do { try await stream.stopCapture() } catch { stopError = error }
         queue.sync {
             input.markAsFinished()
             systemAudioInput?.markAsFinished()
@@ -351,12 +368,18 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         }
         await writer.finishWriting()
         cleanupRecordingState()
+        if let stopError { throw stopError }
+        if let error = writer.error { throw error }
         return url
     }
 
     @MainActor
     func cancelRecording() async {
+        guard !isFinishing else { return }
+        stopTimer.cancel()
         guard let stream = stream, let writer = writer, let url = outputURL else { return }
+        isFinishing = true
+        defer { isFinishing = false }
         stopMicrophoneCapture()
         try? await stream.stopCapture()
         queue.sync {
@@ -426,6 +449,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
 
     @MainActor
     private func cleanupRecordingState() {
+        stopTimer.cancel()
         stream = nil
         streamOutput = nil
         queue.sync {
@@ -442,7 +466,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
 
     @MainActor
     private func handleUnexpectedStop(_ error: Error, from stoppedStream: SCStream) async {
-        guard stream === stoppedStream else { return }
+        guard stream === stoppedStream, !isFinishing else { return }
+        isFinishing = true
+        stopTimer.cancel()
+        defer { isFinishing = false }
 
         stopMicrophoneCapture()
         let activeWriter = queue.sync { () -> AVAssetWriter? in

@@ -3,6 +3,7 @@ import AppKit
 @MainActor
 final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     var onStop: (() -> Void)?
+    var remainingTime: (() -> TimeInterval?)?
     var onMicrophoneChange: ((Bool) -> Void)?
     var onAudioModeChange: ((RecordingAudioMode) -> Void)?
 
@@ -17,7 +18,7 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
 
     init() {
         let screen = NSScreen.main ?? NSScreen.screens.first!
-        let size = NSSize(width: 238, height: 38)
+        let size = NSSize(width: 320, height: 38)
         let frame = NSRect(
             x: screen.visibleFrame.midX - size.width / 2,
             y: screen.visibleFrame.maxY - size.height - 8,
@@ -48,6 +49,7 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
 
     func present() {
         startedAt = Date()
+        tick()
         startTicker()
         showWindow(nil)
         window?.alphaValue = 0
@@ -162,6 +164,7 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     private func stopTicker() {
         ticker?.invalidate()
         ticker = nil
+        startedAt = nil
     }
 
     private func tick() {
@@ -169,7 +172,13 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
         let elapsed = Int(Date().timeIntervalSince(started))
         let mm = elapsed / 60
         let ss = elapsed % 60
-        timerLabel.stringValue = String(format: "%02d:%02d", mm, ss)
+        if let remaining = remainingTime?() {
+            let seconds = Int(ceil(remaining))
+            timerLabel.stringValue = String(format: "%02d:%02d left", seconds / 60, seconds % 60)
+            timerLabel.setAccessibilityLabel("Automatic stop in \(seconds / 60) minutes \(seconds % 60) seconds")
+        } else {
+            timerLabel.stringValue = String(format: "%02d:%02d", mm, ss)
+        }
     }
 
     @objc private func stopTapped() { onStop?() }
