@@ -45,7 +45,11 @@ if ! security find-identity -v -p codesigning | grep -qF "$IDENTITY"; then
 fi
 
 echo "→ Building…"
-"$HERE/build.sh" release >/dev/null
+env -u KLIK_APP_STORE "$HERE/build.sh" release >/dev/null
+if ! otool -L "$APP_BUNDLE/Contents/MacOS/$APP_NAME" | grep -q Sparkle; then
+    echo "✗ Direct release binary does not link Sparkle" >&2
+    exit 1
+fi
 
 # Developer ID signature, hardened runtime and a secure timestamp are what the
 # notary service requires. Sign Sparkle's nested components explicitly from
@@ -118,9 +122,9 @@ if [[ -f "$HERE/appcast.xml" ]]; then
 fi
 "$SPARKLE_TOOLS/generate_appcast" \
     --account com.marino.klik \
-    --download-url-prefix "https://github.com/marino143/klik/releases/latest/download/" \
+    --download-url-prefix "https://github.com/marino143/klik/releases/download/v$VERSION/" \
     --link "https://codigit.io/apps/klik" \
-    --maximum-versions 1 \
+    --maximum-versions 0 \
     --maximum-deltas 0 \
     "$UPDATES_DIR"
 cp "$UPDATES_DIR/appcast.xml" "$HERE/appcast.xml"
