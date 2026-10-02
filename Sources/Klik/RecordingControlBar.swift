@@ -9,6 +9,7 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
 
     private let timerLabel = NSTextField(labelWithString: "00:00")
     private let recIndicator = NSView()
+    private let stopButton = NSButton()
     private let microphoneButton = NSButton()
     private let audioModeButton = NSButton()
     private var isMicrophoneEnabled = true
@@ -47,8 +48,8 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func present() {
-        startedAt = Date()
+    func present(startedAt: Date = Date()) {
+        self.startedAt = startedAt
         tick()
         startTicker()
         showWindow(nil)
@@ -57,6 +58,19 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
             ctx.duration = 0.18
             window?.animator().alphaValue = 1
         }
+    }
+
+    /// Capture may take time to stop and finish its MP4. Do not keep showing
+    /// a blinking recording clock after the coordinator accepts Stop.
+    func showStopping() {
+        stopTicker()
+        timerLabel.stringValue = "Stopping…"
+        timerLabel.setAccessibilityLabel("Stopping recording")
+        recIndicator.layer?.removeAnimation(forKey: "blink")
+        recIndicator.layer?.backgroundColor = NSColor.secondaryLabelColor.cgColor
+        stopButton.isEnabled = false
+        microphoneButton.isEnabled = false
+        audioModeButton.isEnabled = false
     }
 
     func dismissBar() {
@@ -87,7 +101,11 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
         timerLabel.textColor = .white
         timerLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        let stopButton = NSButton(image: NSImage(systemSymbolName: "stop.fill", accessibilityDescription: "Stop")!, target: self, action: #selector(stopTapped))
+        stopButton.image = NSImage(systemSymbolName: "stop.fill", accessibilityDescription: "Stop")
+        stopButton.target = self
+        stopButton.action = #selector(stopTapped)
+        stopButton.setAccessibilityLabel("Stop recording")
+        stopButton.toolTip = "Stop recording"
         stopButton.bezelStyle = .circular
         stopButton.isBordered = false
         stopButton.contentTintColor = .systemRed

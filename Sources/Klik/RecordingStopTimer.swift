@@ -9,9 +9,14 @@ final class RecordingStopTimer {
     private var generation = UUID()
     private var onTimeout: (() -> Void)?
     private let now: () -> TimeInterval
+    private let schedule: (Timer) -> Void
 
-    init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+    init(
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        schedule: @escaping (Timer) -> Void = { RunLoop.main.add($0, forMode: .common) }
+    ) {
         self.now = now
+        self.schedule = schedule
     }
 
     var remaining: TimeInterval? { deadline.map { max(0, $0 - now()) } }
@@ -29,7 +34,7 @@ final class RecordingStopTimer {
             }
         }
         self.timer = timer
-        RunLoop.main.add(timer, forMode: .common)
+        schedule(timer)
     }
 
     func checkDeadline() {

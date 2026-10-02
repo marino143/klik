@@ -252,8 +252,10 @@ final class CaptureCoordinator {
     }
 
     private func stopVideoRecording() {
+        KlikLog("Klik: stop requested active=\(recorder.isRecording) alreadyStopping=\(isStoppingRecording)")
         guard recorder.isRecording, !isStoppingRecording else { return }
         isStoppingRecording = true
+        recordingControlBar?.showStopping()
         Task {
             defer { isStoppingRecording = false }
             do {
@@ -278,7 +280,7 @@ final class CaptureCoordinator {
             self?.recorder.setAudioMode(mode)
         }
         self.recordingControlBar = bar
-        bar.present()
+        bar.present(startedAt: recorder.startedAt ?? Date())
     }
 
     private func dismissControlBar() {

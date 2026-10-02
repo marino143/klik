@@ -232,6 +232,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             self.startedAt = Date()
             stopTimer.start(duration: stopDuration) { [weak self] in
                 guard let self, self.isRecording, !self.isFinishing else { return }
+                KlikLog("Klik: automatic stop deadline reached")
                 self.onAutomaticStop?()
             }
             KlikLog("Klik: stream.startCapture() OK — recording in progress")
@@ -357,16 +358,22 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
 
         isFinishing = true
         stopTimer.cancel()
+        let stopBegan = ProcessInfo.processInfo.systemUptime
+        KlikLog("Klik: stop accepted; automatic timer cancelled; stopping microphone")
         defer { isFinishing = false }
         stopMicrophoneCapture()
+        KlikLog("Klik: microphone stopped; requesting screen capture stop")
         var stopError: Error?
         do { try await stream.stopCapture() } catch { stopError = error }
+        KlikLog("Klik: screen capture stop returned after \(ProcessInfo.processInfo.systemUptime - stopBegan)s error=\(stopError != nil)")
         queue.sync {
             input.markAsFinished()
             systemAudioInput?.markAsFinished()
             microphoneInput?.markAsFinished()
         }
+        KlikLog("Klik: finishing MP4 writer")
         await writer.finishWriting()
+        KlikLog("Klik: MP4 writer finished after \(ProcessInfo.processInfo.systemUptime - stopBegan)s status=\(writer.status.rawValue)")
         cleanupRecordingState()
         if let stopError { throw stopError }
         if let error = writer.error { throw error }
