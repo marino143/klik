@@ -1,6 +1,35 @@
 # Manual stop investigation (2026-10-02)
 
-## Scope and result
+## Follow-up: confirmed countdown continued (2026-10-02)
+
+**Still unresolved.** The user clarified that the remaining-time counter kept counting **down** after clicking Stop near 90 minutes. This supersedes the ambiguous “advancing” description below. The previous stopping-feedback change is useful but does **not** explain this incident. In the inspected code, an accepted recorder stop cancels the deadline before microphone shutdown, SCStream shutdown, or MP4 finalization. Sustained countdown is therefore evidence against “Stop was accepted but the 32-GB file was just finalizing.” It points earlier in the path, without proving which earlier stage failed.
+
+### Bounded findings
+
+- The recording bar is a borderless **NSWindow**, not an NSPanel and not a nonactivatingPanel. Replacing a supposed nonactivating panel would fix an imaginary implementation. Runtime assertions confirm it cannot become key, its native Stop button accepts first mouse, and the button itself does not move the window on mouse-down. The background is intentionally draggable.
+- Window collection flags are canJoinAllSpaces, stationary, fullScreenAuxiliary; level is statusBar; ignoresMouseEvents is false. These are intentions, not proof that WindowServer delivered a physical click while Chrome owned a fullscreen Space. In-process sendEvent tests bypass that routing. No Chrome/fullscreen state was changed in this investigation.
+- There are no global/local NSEvent monitors in current Klik source. The bar has no timer-driven window movement or layout constraints that move Stop: Stop is pinned to the trailing edge at a fixed 28×28 points. The ticker only changes label text/accessibility text. Tests confirm unchanged button/window frames across a countdown tick.
+- A screenshot region selector or window picker can be invoked while recording and creates mouse-intercepting screenSaver-level windows, above the statusBar-level recording bar. Their normal completion/cancellation orders those windows out before callbacks. The quick-access overlay/toast/HUD are lower, at floating level; the processing HUD also ignores mouse events. This identifies a possible interception route, **not evidence that an overlay was present in the incident**. No speculative z-order or input-policy change was made.
+- AppDelegate strongly owns the coordinator, which strongly owns the current bar. The bar's weak-self callback and automatic-stop callback both reach that same coordinator. A permanently lost coordinator would prevent automatic stop too. The coordinator's already-stopping guard is set only after accepting stop; recording stream state and finishing guards do not depend on elapsed minutes or file size. No concrete lifetime/guard defect matching the report was found.
+- Relevant local diagnostic search found only launch entries for 0.2.3 on September 16 and no request/accepted/deadline/finalization entries. Those logs cannot diagnose the reported 0.2.9 session. No recording contents or filenames were inspected by the log search.
+
+### New mouse-event tests (not performClick)
+
+RecordingControlBarMouseTests dispatches leftMouseDown through the real NSWindow and supplies leftMouseUp to NSButton's nested AppKit tracking loop. A simulated 90-minute session accepts the click, cancels the actual RecordingStopTimer, and shows Stopping…. A down/drag-out/up sequence cancels the native action, leaves the countdown decreasing, and a subsequent ordinary click works. The latter is expected button behavior and only a controlled symptom reproduction, **not a reproduction or explanation of the user's failure**.
+
+Harness caveat discovered experimentally: prequeuing drag and release can strand AppKit in its tracking loop, while a release outside without a preceding drag can still activate. The retained test delivers drag and release in eventTracking mode; it does not mistake malformed synthetic input for a product bug. The stalled test process was stopped; the running Klik app was not touched.
+
+Verification: full swift test passes **21 tests**, including both mouse tests; release swift build succeeds (existing unrelated warnings remain). Existing build/Klik.app passes codesign --verify --deep --strict and has TeamIdentifier N6P82864Q5. No production source changed in this follow-up, no replacement bundle installed, no recording made, no release/push. Signing validation refers to the existing bundle, not a newly packaged release.
+
+### Next diagnostic boundary and one user question
+
+If a short, authorized reproduction is possible, use a blank test window and a short timer, first normal window then fullscreen Chrome. Do not need a 90-minute or 32-GB capture just to test click routing. Compare floating Stop with the existing Command-Shift-5 recording toggle. Preserve the original recording; do not force-quit during finalization.
+
+Instrumentation plan for a diagnostic build (not added speculatively here): retain existing coordinator/recorder phase logs; add source tags for bar/menu-or-shortcut/automatic stop, bar-window mouse-down hit target and active-Space/visibility/key/app-active booleans, Stop tracking begin/end with action-fired boolean, and callback-presence checks. Use a per-session ID, no window titles, other-app content, global event tap, or screen coordinates. A window event without action isolates tracking; action without accepted coordinator request isolates callback/guard; accepted request without recorder acceptance isolates scheduling/state. No window event cannot alone prove interception without a user-confirmed click and Space context.
+
+**Single highest-value next question:** “When Stop failed, was it the red square on Klik's floating bar over fullscreen Chrome, or were you using the menu/keyboard shortcut?”
+
+## Original investigation: scope and result
 
 Investigated v0.2.9 build 11: Stop worked early, appeared not to work near minute 90, visible counter kept advancing, recording reportedly 32 GB. No user recording was opened, no running app was stopped or replaced, and no release was published.
 
@@ -28,7 +57,7 @@ Post-capture audio mixing is a separate, real scaling risk: EchoCancellingMixer 
 
 Tests cover actual AppKit target/action and view hit testing, simulated 90-minute display, maximum countdown, Stop before deadline, cancellation, stale queued timeout against a replacement session, duplicate button click after accepted stop, and persistent stopping feedback. They do not synthesize global mouse events or prove ScreenCaptureKit/AVAssetWriter behavior under 32-GB load. Production coordinator wiring is source-traced; the native-action tests use a controlled callback rather than a live capture coordinator.
 
-To settle the original incident, collect stop-phase diagnostics from a future reproduction (or a separately authorized synthetic long capture), plus whether the counter was elapsed counting up or countdown counting down. Do not force-quit a potentially finalizing recording or overwrite it.
+The counter direction has now been clarified: it continued counting down. See the follow-up above for revised conclusions and the remaining evidence gap. Do not force-quit a potentially finalizing recording or overwrite it.
 
 ## UI direction and scoped gate
 
