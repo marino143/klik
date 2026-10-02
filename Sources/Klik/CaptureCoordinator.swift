@@ -11,7 +11,7 @@ final class CaptureCoordinator {
     private var isStoppingRecording = false
 
     init() {
-        recorder.onAutomaticStop = { [weak self] in self?.stopVideoRecording() }
+        recorder.onAutomaticStop = { [weak self] in self?.stopVideoRecording(source: .automatic) }
         recorder.onUnexpectedStop = { [weak self] error in
             guard let self else { return }
             self.dismissControlBar()
@@ -133,18 +133,24 @@ final class CaptureCoordinator {
     }
 
     func toggleVideoRecording() {
-        guard !isStoppingRecording else { return }
+        guard !isStoppingRecording else {
+            recorder.stopDiagnostics.event(.coordinatorRejected, source: .menuOrShortcut, flag: true)
+            return
+        }
         if recorder.isRecording {
-            stopVideoRecording()
+            stopVideoRecording(source: .menuOrShortcut)
         } else {
             startFullScreenVideoRecording()
         }
     }
 
     func toggleRegionVideoRecording() {
-        guard !isStoppingRecording else { return }
+        guard !isStoppingRecording else {
+            recorder.stopDiagnostics.event(.coordinatorRejected, source: .regionMenu, flag: true)
+            return
+        }
         if recorder.isRecording {
-            stopVideoRecording()
+            stopVideoRecording(source: .regionMenu)
         } else {
             startRegionVideoRecording()
         }
@@ -251,9 +257,15 @@ final class CaptureCoordinator {
         } ?? NSScreen.main
     }
 
-    private func stopVideoRecording() {
+    private func stopVideoRecording(source: RecordingStopDiagnostics.Source) {
+        let trace = recorder.stopDiagnostics
+        trace.event(.coordinatorRequest, source: source, flag: recorder.isRecording)
         KlikLog("Klik: stop requested active=\(recorder.isRecording) alreadyStopping=\(isStoppingRecording)")
-        guard recorder.isRecording, !isStoppingRecording else { return }
+        guard recorder.isRecording, !isStoppingRecording else {
+            trace.event(.coordinatorRejected, source: source, flag: isStoppingRecording)
+            return
+        }
+        trace.event(.coordinatorAccepted, source: source)
         isStoppingRecording = true
         recordingControlBar?.showStopping()
         Task {
@@ -270,9 +282,13 @@ final class CaptureCoordinator {
     }
 
     private func presentControlBar() {
-        let bar = RecordingControlBar()
+        let trace = recorder.stopDiagnostics
+        let bar = RecordingControlBar(diagnostics: trace)
         bar.remainingTime = { [weak self] in self?.recorder.automaticStopRemaining }
-        bar.onStop = { [weak self] in self?.stopVideoRecording() }
+        bar.onStop = { [weak self] in
+            trace.event(.callback, source: .bar, flag: self != nil)
+            self?.stopVideoRecording(source: .bar)
+        }
         bar.onMicrophoneChange = { [weak self] enabled in
             self?.recorder.setMicrophoneEnabled(enabled)
         }

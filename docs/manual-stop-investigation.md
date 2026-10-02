@@ -1,5 +1,44 @@
 # Manual stop investigation (2026-10-02)
 
+## Button confirmed: opt-in diagnostic implementation
+
+The user confirms clicking the floating **button**, not the menu/shortcut. Fullscreen/Space state remains unknown. The failure is still unresolved; this change instruments the next boundary, not a speculative capture fix. No visual layout, input policy, stop guards, or capture timing were changed. Existing native AppKit hooks and the existing rotating logger were sufficient; no new dependency or global monitor was needed.
+
+### What the new build records
+
+`RecordingStopDiagnostics` snapshots opt-in `KlikStopDiagnostics` at session start. Each trace line contains a random per-recording UUID, sequence, monotonic milliseconds, and only fixed phase/source names and booleans. It traces bar-window down/up and whether the point is within Stop (not coordinates), window visibility/active-Space/key/app-active flags, native Stop tracking begin/end and action-fired status, target/action and callback presence, coordinator request/accept/reject, automatic deadline, recorder acceptance/rejection, microphone, capture stop, writer queue, writer finalization, and completion/failure. `menuOrShortcut` intentionally groups the existing shared entry point; region menu and automatic expiry are separately tagged.
+
+NSButton consumes release inside its native tracking loop, so the window also observes dequeued mouse-up through `nextEvent`; `sendEvent` alone would miss that boundary. Native behavior is delegated unchanged to super. A release can be logged twice if subsequently dispatched through sendEvent; it is not two physical clicks. No drag/move/keyboard events are recorded, no event taps/monitors, no screenshots, media, filenames, private titles, error descriptions, or secrets are added to this trace.
+
+Storage uses the existing async DiagnosticsLogger, not NSLog: `klik.log` plus five rotated archives, nominally 1 MB each (~6 MB total). Fixed short trace lines cannot create oversized entries. Existing unrelated logger messages and export contents are unchanged and are not claimed to be content-free. The logger is best-effort: disk failure, crash before queued writes, or rotation can lose evidence. No missing log entry alone proves WindowServer interception.
+
+Flag meanings: action = callback installed; callback = coordinator alive; coordinatorRequest = recorder active; coordinatorRejected = already stopping; trackingBegin = button enabled; trackingEnd = action fired; deadline = callback installed; captureEnd = error present; writerEnd = writer completed. Recorder rejection means its existing starting/finishing/resource guard rejected the call.
+
+### Usable now, on released v0.2.9
+
+While recording, press **Command-Shift-5 once**, or click the Klik menu-bar icon and select **Record Video (Full Screen)**. Despite its static label, it toggles to Stop when a recording is active, including region recordings. The Region item also uses that active-recording stop path. Confirmed in the `v0.2.9` source tag: AppDelegate menu and Carbon hotkey both reach CaptureCoordinator.toggleVideoRecording, which calls stopVideoRecording when active. This is a verified alternate code route, **not a proven workaround in the failing session**; macOS/another app may own Command-Shift-5 if registration failed, so prefer the menu then. Do not repeatedly toggle after completion (that starts a new recording), and do not force-quit during finalization.
+
+For existing evidence, after stopping safely use **Klik → Export Diagnostics…** in the direct-distribution app. Share the approximate click time/time zone and whether Chrome was fullscreen alongside the export; no need to send the 32-GB movie. The released app lacks the new mouse/action trace, so its export cannot retroactively reconstruct delivery. The export includes other Klik logs, crash reports and system summary: review before sharing. App Store builds do not expose that exporter.
+
+### Diagnostic-build evidence procedure (requires a new build)
+
+This instrumentation is **not installed in the running/released app**. A newly packaged diagnostic app containing this commit must be provided and explicitly authorized before installation/testing. No install, app quit, publishing, or real recording was performed here.
+
+After any current recording has safely finished and the user has voluntarily quit Klik, launch the supplied diagnostic app once with a process-only argument (replace the path with the supplied bundle):
+
+```sh
+open "/path/to/Klik.app" --args -KlikStopDiagnostics YES
+```
+
+Do not use `open -n` or launch a second instance. The argument will not affect an already-running instance. It writes no persistent defaults; a later ordinary launch disables the trace. For a short blank-window test use a 2-minute auto-stop, try the button before expiry, then the menu fallback if needed. A short passing test does not rule out the reported 90-minute failure. Record the approximate click time and normal/fullscreen context manually; no full-screen capture needs to be shared.
+
+After stop/finalization, export diagnostics. For the narrowest shareable evidence, extract only `KlikStopTrace` lines from the exported `Logs/klik*.log` files and send those plus click time/context. UUID and sequence correlate action to stop phases. Down without action points to hit testing/tracking; action without callback/coordinator isolates delivery/lifetime; accepted coordinator without recorder acceptance isolates scheduling/state; the last begin/end pair identifies the pending shutdown phase. No down at the stated click time remains ambiguous (routing, missing logs, wrong build/flag/session); compare with `sessionStarted` and `barPresented` first.
+
+Regression coverage adds opt-out/no-write and per-session/source/sequence tests; existing native mouse tests now assert down/up, successful action, and drag-out cancellation traces. Tests still bypass WindowServer/Spaces and do not make a live 90-minute recording.
+
+
+Verification for the opt-in trace: `swift test` passes **23 tests, zero failures**; `swift build -c release` succeeds (existing unrelated warnings). Only the executable was compiled; no signed diagnostic app was packaged or installed. Root cause remains blocked on a trace from an affected physical click.
+
 ## Follow-up: confirmed countdown continued (2026-10-02)
 
 **Still unresolved.** The user clarified that the remaining-time counter kept counting **down** after clicking Stop near 90 minutes. This supersedes the ambiguous “advancing” description below. The previous stopping-feedback change is useful but does **not** explain this incident. In the inspected code, an accepted recorder stop cancels the deadline before microphone shutdown, SCStream shutdown, or MP4 finalization. Sustained countdown is therefore evidence against “Stop was accepted but the 32-GB file was just finalizing.” It points earlier in the path, without proving which earlier stage failed.

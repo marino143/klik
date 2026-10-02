@@ -46,6 +46,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
     private(set) var startedAt: Date?
     var onUnexpectedStop: (@MainActor (Error) -> Void)?
     var onAutomaticStop: (@MainActor () -> Void)?
+    @MainActor private(set) var stopDiagnostics = RecordingStopDiagnostics()
     @MainActor private let stopTimer = RecordingStopTimer()
     @MainActor var automaticStopRemaining: TimeInterval? { stopTimer.remaining }
     @MainActor private var isFinishing = false
@@ -96,6 +97,8 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             throw RecordingError.alreadyRecording
         }
 
+        stopDiagnostics = RecordingStopDiagnostics()
+        stopDiagnostics.event(.sessionStarted)
         isStarting = true
         defer { isStarting = false }
         stopTimer.cancel()
@@ -231,7 +234,9 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
             try await stream.startCapture()
             self.startedAt = Date()
             stopTimer.start(duration: stopDuration) { [weak self] in
-                guard let self, self.isRecording, !self.isFinishing else { return }
+                guard let self else { return }
+                self.stopDiagnostics.event(.deadline, source: .automatic, flag: self.onAutomaticStop != nil)
+                guard self.isRecording, !self.isFinishing else { return }
                 KlikLog("Klik: automatic stop deadline reached")
                 self.onAutomaticStop?()
             }
@@ -352,31 +357,44 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
 
     @MainActor
     func stopRecording() async throws -> URL {
+        let trace = stopDiagnostics
+        trace.event(.recorderRequest)
         guard !isStarting, !isFinishing, let stream = stream, let writer = writer, let input = videoInput, let url = outputURL else {
+            trace.event(.recorderRejected)
             throw RecordingError.notRecording
         }
 
         isFinishing = true
         stopTimer.cancel()
+        trace.event(.recorderAccepted)
         let stopBegan = ProcessInfo.processInfo.systemUptime
         KlikLog("Klik: stop accepted; automatic timer cancelled; stopping microphone")
         defer { isFinishing = false }
+        trace.event(.microphoneBegin)
         stopMicrophoneCapture()
+        trace.event(.microphoneEnd)
         KlikLog("Klik: microphone stopped; requesting screen capture stop")
         var stopError: Error?
+        trace.event(.captureBegin)
         do { try await stream.stopCapture() } catch { stopError = error }
+        trace.event(.captureEnd, flag: stopError != nil)
         KlikLog("Klik: screen capture stop returned after \(ProcessInfo.processInfo.systemUptime - stopBegan)s error=\(stopError != nil)")
+        trace.event(.writerQueueBegin)
         queue.sync {
             input.markAsFinished()
             systemAudioInput?.markAsFinished()
             microphoneInput?.markAsFinished()
         }
+        trace.event(.writerQueueEnd)
         KlikLog("Klik: finishing MP4 writer")
+        trace.event(.writerBegin)
         await writer.finishWriting()
+        trace.event(.writerEnd, flag: writer.status == .completed)
         KlikLog("Klik: MP4 writer finished after \(ProcessInfo.processInfo.systemUptime - stopBegan)s status=\(writer.status.rawValue)")
         cleanupRecordingState()
-        if let stopError { throw stopError }
-        if let error = writer.error { throw error }
+        if let stopError { trace.event(.stopFailed); throw stopError }
+        if let error = writer.error { trace.event(.stopFailed); throw error }
+        trace.event(.stopCompleted)
         return url
     }
 

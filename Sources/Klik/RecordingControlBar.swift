@@ -9,7 +9,8 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
 
     private let timerLabel = NSTextField(labelWithString: "00:00")
     private let recIndicator = NSView()
-    private let stopButton = NSButton()
+    private let stopButton = RecordingStopButton()
+    private let stopDiagnostics: RecordingStopDiagnostics
     private let microphoneButton = NSButton()
     private let audioModeButton = NSButton()
     private var isMicrophoneEnabled = true
@@ -17,7 +18,9 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     private var ticker: Timer?
     private var startedAt: Date?
 
-    init() {
+    init(diagnostics: RecordingStopDiagnostics? = nil) {
+        let diagnostics = diagnostics ?? RecordingStopDiagnostics()
+        self.stopDiagnostics = diagnostics
         let screen = NSScreen.main ?? NSScreen.screens.first!
         let size = NSSize(width: 320, height: 38)
         let frame = NSRect(
@@ -26,7 +29,7 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
             width: size.width,
             height: size.height
         )
-        let window = NSWindow(
+        let window = RecordingControlWindow(
             contentRect: frame,
             styleMask: .borderless,
             backing: .buffered,
@@ -42,6 +45,9 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
 
         super.init(window: window)
         window.delegate = self
+        window.stopDiagnostics = diagnostics
+        window.diagnosticStopButton = stopButton
+        stopButton.stopDiagnostics = diagnostics
         window.contentView = buildView()
     }
 
@@ -49,6 +55,7 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     func present(startedAt: Date = Date()) {
+        stopDiagnostics.event(.barPresented)
         self.startedAt = startedAt
         tick()
         startTicker()
@@ -63,6 +70,7 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     /// Capture may take time to stop and finish its MP4. Do not keep showing
     /// a blinking recording clock after the coordinator accepts Stop.
     func showStopping() {
+        stopDiagnostics.event(.stoppingShown)
         stopTicker()
         timerLabel.stringValue = "Stopping…"
         timerLabel.setAccessibilityLabel("Stopping recording")
@@ -74,6 +82,7 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
     }
 
     func dismissBar() {
+        stopDiagnostics.event(.barDismissed)
         stopTicker()
         guard let window = self.window else { return }
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -199,7 +208,11 @@ final class RecordingControlBar: NSWindowController, NSWindowDelegate {
         }
     }
 
-    @objc private func stopTapped() { onStop?() }
+    @objc private func stopTapped() {
+        stopButton.actionFired = true
+        stopDiagnostics.event(.action, source: .bar, flag: onStop != nil)
+        onStop?()
+    }
 
     @objc private func microphoneTapped() {
         isMicrophoneEnabled.toggle()

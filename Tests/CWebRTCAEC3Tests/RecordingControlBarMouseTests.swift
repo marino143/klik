@@ -48,7 +48,9 @@ final class RecordingControlBarMouseTests: XCTestCase {
         let timer = RecordingStopTimer(now: { now })
         timer.start(duration: 7200) {}
         now = 5400
-        let bar = RecordingControlBar()
+        var events: [String] = []
+        let trace = RecordingStopDiagnostics(enabled: true, sink: { events.append($0) })
+        let bar = RecordingControlBar(diagnostics: trace)
         bar.remainingTime = { timer.remaining }
         var stops = 0
         bar.onStop = { stops += 1; timer.cancel(); bar.showStopping() }
@@ -66,6 +68,10 @@ final class RecordingControlBarMouseTests: XCTestCase {
         XCTAssertTrue(stop.acceptsFirstMouse(for: nil))
         XCTAssertFalse(stop.mouseDownCanMoveWindow)
         try click(stop, in: window)
+        XCTAssertTrue(events.contains { $0.contains("phase=windowMouseDown stopHit=true") })
+        XCTAssertTrue(events.contains { $0.contains("phase=windowMouseUp stopHit=true") })
+        XCTAssertTrue(events.contains { $0.contains("phase=action source=bar flag=true") })
+        XCTAssertTrue(events.contains { $0.contains("phase=trackingEnd flag=true") })
         XCTAssertEqual(stops, 1)
         XCTAssertNil(timer.remaining)
         XCTAssertEqual(content.subviews.compactMap { $0 as? NSTextField }.first?.stringValue, "Stopping…")
@@ -77,7 +83,9 @@ final class RecordingControlBarMouseTests: XCTestCase {
         var now = 5400.0
         let timer = RecordingStopTimer(now: { now })
         timer.start(duration: 600) {}
-        let bar = RecordingControlBar()
+        var events: [String] = []
+        let trace = RecordingStopDiagnostics(enabled: true, sink: { events.append($0) })
+        let bar = RecordingControlBar(diagnostics: trace)
         bar.remainingTime = { timer.remaining }
         var stops = 0
         bar.onStop = { stops += 1; timer.cancel(); bar.showStopping() }
@@ -92,6 +100,9 @@ final class RecordingControlBarMouseTests: XCTestCase {
         let originalFrame = stop.frame
         let originalWindowFrame = window.frame
         try click(stop, in: window, releaseOutside: true)
+        XCTAssertTrue(events.contains { $0.contains("phase=windowMouseUp stopHit=false") })
+        XCTAssertTrue(events.contains { $0.contains("phase=trackingEnd flag=false") })
+        XCTAssertFalse(events.contains { $0.contains("phase=action") })
         XCTAssertEqual(stops, 0)
         now += 1
         try await Task.sleep(nanoseconds: 650_000_000)
