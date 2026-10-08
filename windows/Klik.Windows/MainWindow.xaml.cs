@@ -4,6 +4,7 @@ using ScreenRecorderLib;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
 
@@ -103,6 +104,10 @@ public partial class MainWindow : Window
     {
         try
         {
+            // RecordingView shares this top-level HWND. Apply and verify before
+            // the first frame, using the current handle on every new recording.
+            // Retain affinity through stop/cancel finalization and HWND lifetime.
+            RecordingCaptureExclusion.Apply(new WindowInteropHelper(this).EnsureHandle());
             _cancelRequested = false;
             ReadyView.Visibility = Visibility.Collapsed;
             RecordingView.Visibility = Visibility.Visible;

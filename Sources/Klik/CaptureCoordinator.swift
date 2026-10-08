@@ -171,12 +171,10 @@ final class CaptureCoordinator {
                     return
                 }
                 let region = CGRect(x: 0, y: 0, width: CGFloat(display.width), height: CGFloat(display.height))
-                let excludingApps = klikApps(in: content)
                 _ = try await self.recorder.startRecording(
                     region: region,
                     on: display,
-                    screen: screen,
-                    excludingApps: excludingApps
+                    screen: screen
                 )
                 self.presentControlBar()
             } catch {
@@ -224,15 +222,13 @@ final class CaptureCoordinator {
                         self.showError(CaptureError.noDisplay)
                         return
                     }
-                    let excludingApps = self.klikApps(in: content)
                     Task {
                         do {
                             try await Task.sleep(nanoseconds: 200_000_000)
                             _ = try await self.recorder.startRecording(
                                 region: selection.rect,
                                 on: display,
-                                screen: selection.screen,
-                                excludingApps: excludingApps
+                                screen: selection.screen
                             )
                             self.presentControlBar()
                         } catch {
@@ -244,11 +240,6 @@ final class CaptureCoordinator {
                 showError(error)
             }
         }
-    }
-
-    private func klikApps(in content: SCShareableContent) -> [SCRunningApplication] {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.marino.klik"
-        return content.applications.filter { $0.bundleIdentifier == bundleID }
     }
 
     private func matchingScreen(for display: SCDisplay) -> NSScreen? {

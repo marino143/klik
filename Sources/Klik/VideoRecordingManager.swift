@@ -89,8 +89,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         region: CGRect,
         on display: SCDisplay,
         screen: NSScreen,
-        excluding windows: [SCWindow] = [],
-        excludingApps: [SCRunningApplication] = []
+        excluding windows: [SCWindow] = []
     ) async throws -> URL {
         guard !isRecording, !isStarting, !isFinishing else {
             KlikLog("Klik: startRecording called while already recording — ignoring")
@@ -101,6 +100,12 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         stopDiagnostics.event(.sessionStarted)
         isStarting = true
         defer { isStarting = false }
+        // A menu-bar app may have no onscreen windows yet. Excluding the process
+        // also covers the control bar created AFTER this snapshot and filter.
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        let excludedApps = try RecordingCaptureExclusion.ownApplications(
+            in: content.applications, processID: ProcessInfo.processInfo.processIdentifier,
+            applicationProcessID: { $0.processID })
         stopTimer.cancel()
         let stopDuration = RecordingStopSettings().duration
         let scale = screen.backingScaleFactor
@@ -191,12 +196,11 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         // We use AVCaptureSession for the microphone instead — it coexists
         // properly with other apps.
 
-        let filter: SCContentFilter
-        if !excludingApps.isEmpty {
-            filter = SCContentFilter(display: display, excludingApplications: excludingApps, exceptingWindows: [])
-        } else {
-            filter = SCContentFilter(display: display, excludingWindows: windows)
-        }
+        let filter = SCContentFilter(
+            display: display, excludingApplications: excludedApps,
+            exceptingWindows: RecordingCaptureExclusion.otherWindows(
+                in: windows, processID: ProcessInfo.processInfo.processIdentifier,
+                ownerProcessID: { $0.owningApplication?.processID }))
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
         let output = VideoStreamOutput(owner: self)
         do {

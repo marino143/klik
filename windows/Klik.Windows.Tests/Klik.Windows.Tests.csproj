@@ -11,5 +11,6 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.0.0" />
     <Compile Include="..\Klik.Windows\Models\CaptureTarget.cs" Link="Models\CaptureTarget.cs" />
     <Compile Include="..\Klik.Windows\Services\PcmWaveWriter.cs" Link="Services\PcmWaveWriter.cs" />
+    <Compile Include="../Klik.Windows/Services/RecordingCaptureExclusion.cs" Link="Services/RecordingCaptureExclusion.cs" />
   </ItemGroup>
 </Project>
