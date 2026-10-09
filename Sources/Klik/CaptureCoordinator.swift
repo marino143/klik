@@ -9,6 +9,7 @@ final class CaptureCoordinator {
     private var windowPicker: WindowPickerController?
     private var recordingControlBar: RecordingControlBar?
     private var isStoppingRecording = false
+    private var isStartingRecording = false
 
     init() {
         recorder.onAutomaticStop = { [weak self] in self?.stopVideoRecording(source: .automatic) }
@@ -157,7 +158,10 @@ final class CaptureCoordinator {
     }
 
     private func startFullScreenVideoRecording() {
+        guard !isStartingRecording else { return }
+        isStartingRecording = true
         Task {
+            defer { isStartingRecording = false }
             await ensureMicrophonePermissionOrWarn()
             do {
                 let content = try await manager.shareableContent()
@@ -174,10 +178,12 @@ final class CaptureCoordinator {
                 _ = try await self.recorder.startRecording(
                     region: region,
                     on: display,
-                    screen: screen
+                    screen: screen,
+                    prepareControls: { self.prepareControlBar() }
                 )
                 self.presentControlBar()
             } catch {
+                if !recorder.isRecording { dismissControlBar() }
                 showError(error)
             }
         }
@@ -207,6 +213,7 @@ final class CaptureCoordinator {
     }
 
     private func startRegionVideoRecording() {
+        guard !isStartingRecording else { return }
         Task {
             await ensureMicrophonePermissionOrWarn()
             do {
@@ -222,16 +229,21 @@ final class CaptureCoordinator {
                         self.showError(CaptureError.noDisplay)
                         return
                     }
+                    guard !self.isStartingRecording else { return }
+                    self.isStartingRecording = true
                     Task {
+                        defer { self.isStartingRecording = false }
                         do {
                             try await Task.sleep(nanoseconds: 200_000_000)
                             _ = try await self.recorder.startRecording(
                                 region: selection.rect,
                                 on: display,
-                                screen: selection.screen
+                                screen: selection.screen,
+                                prepareControls: { self.prepareControlBar() }
                             )
                             self.presentControlBar()
                         } catch {
+                            if !self.recorder.isRecording { self.dismissControlBar() }
                             self.showError(error)
                         }
                     }
@@ -272,7 +284,7 @@ final class CaptureCoordinator {
         }
     }
 
-    private func presentControlBar() {
+    private func prepareControlBar() {
         let trace = recorder.stopDiagnostics
         let bar = RecordingControlBar(diagnostics: trace)
         bar.remainingTime = { [weak self] in self?.recorder.automaticStopRemaining }
@@ -287,7 +299,12 @@ final class CaptureCoordinator {
             self?.recorder.setAudioMode(mode)
         }
         self.recordingControlBar = bar
-        bar.present(startedAt: recorder.startedAt ?? Date())
+        // init creates a WindowServer window (defer:false); no UI is shown yet.
+        _ = bar.window?.windowNumber
+    }
+
+    private func presentControlBar() {
+        recordingControlBar?.present(startedAt: recorder.startedAt ?? Date())
     }
 
     private func dismissControlBar() {

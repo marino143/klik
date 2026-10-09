@@ -89,7 +89,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         region: CGRect,
         on display: SCDisplay,
         screen: NSScreen,
-        excluding windows: [SCWindow] = []
+        excluding windows: [SCWindow] = [],
+        // Internal opt-out permits consented video-only integration tests. UI defaults stay unchanged.
+        captureAudio: Bool = true,
+        prepareControls: () -> Void = {}
     ) async throws -> URL {
         guard !isRecording, !isStarting, !isFinishing else {
             KlikLog("Klik: startRecording called while already recording — ignoring")
@@ -100,12 +103,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         stopDiagnostics.event(.sessionStarted)
         isStarting = true
         defer { isStarting = false }
-        // A menu-bar app may have no onscreen windows yet. Excluding the process
-        // also covers the control bar created AFTER this snapshot and filter.
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-        let excludedApps = try RecordingCaptureExclusion.ownApplications(
-            in: content.applications, processID: ProcessInfo.processInfo.processIdentifier,
-            applicationProcessID: { $0.processID })
+        // Materialize the actual control window before asking ScreenCaptureKit
+        // for its owner. A cold menu-only process is absent from applications.
+        prepareControls()
+        let excludedApps = try await RecordingCaptureExclusion.resolveOwnApplications()
         stopTimer.cancel()
         let stopDuration = RecordingStopSettings().duration
         let scale = screen.backingScaleFactor
@@ -188,7 +189,7 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         config.colorSpaceName = CGColorSpace.displayP3
         config.sourceRect = region
         config.scalesToFit = true
-        config.capturesAudio = true
+        config.capturesAudio = captureAudio
         config.sampleRate = 48000
         config.channelCount = 2
         // Note: SCStream's captureMicrophone (macOS 15+) silently drops samples
@@ -256,10 +257,10 @@ final class VideoRecordingManager: NSObject, @unchecked Sendable {
         // Spin up a separate AVCaptureSession for the microphone — it
         // coexists with browser/Teams mic usage, unlike SCStream's built-in
         // microphone capture which silently dropped samples in those cases.
-        if MicrophoneAccess.isGranted {
+        if captureAudio && MicrophoneAccess.isGranted {
             startMicrophoneCapture()
         } else {
-            KlikLog("Klik: microphone permission not granted, recording without voice")
+            KlikLog("Klik: microphone capture disabled or permission unavailable; recording without voice")
         }
 
         return fileURL
